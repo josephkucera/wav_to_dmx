@@ -31,15 +31,15 @@ from helloworld import*
 #     print (d)
 #     d +=1
     
-# names = ["robert", "kocka", "pes"] # vytiskne postupne kazde jmeno
-# for x in names:
-#     print (x)
-# slovo = "ahojokrujecky" 
-# for x in slovo: #vytiskne kazde pismeno
-#     print (x)
-# # break klasicky stopne loop, continue přeskočí aktuální iteraci ale bude pokračovat dál v loopu
-# for x in range(1,5):
-#     print(x)
+names = ["robert", "kocka", "pes"] # vytiskne postupne kazde jmeno
+for x in names:
+    print (x)
+slovo = "ahojokrujecky" 
+for x in slovo: #vytiskne kazde pismeno
+    print (x)
+# break klasicky stopne loop, continue přeskočí aktuální iteraci ale bude pokračovat dál v loopu
+for x in range(1,5):
+    print(x)
 
 # print("")
 # for x in range (0,10,2): # (od, do, krok)
