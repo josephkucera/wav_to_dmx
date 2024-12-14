@@ -1,3 +1,4 @@
+import time
 import pyaudio
 import numpy as np
 
@@ -29,9 +30,9 @@ frames = []
 samples_per_second = RATE // FRAMES_PER_BUFFER
 
 # Hlavní smyčka pro čtení dat
-for i in range(0, int(RATE / FRAMES_PER_BUFFER * seconds)):
+for i in range(0, int((RATE / FRAMES_PER_BUFFER) * seconds)):
     data = stream.read(FRAMES_PER_BUFFER)
-    frames.append(data)
+    frames.append(data) #funkce extend přikládá na konec // append "vnořuje" listy
 
     # Převedení binárních dat na numpy array
     audio_data = np.frombuffer(data, dtype=np.int16)
@@ -51,7 +52,19 @@ p.terminate()
 
 print("\nStop recording")
 
+while True: 
+    time.sleep(1)
+    print ("furt jedu")
 
 
 # načtu buffer a uložím ho do hodnoty data kam se uloží jako stojové číslo x01 x00 xff apod. 
 # z toho potřebuju načíst víc hodnot 
+# ctrl + . (import neimportované knihovny) 
+# crtl + c (přerušení smyčky)
+
+# Do příště
+# Předělat na "nekonečnou smyčku", Vyprintit RMS za každou "proběhlou" vteřinu (ne buffer ale celá s) ať se vkládá za sebe
+# Nějaký beat detection implementovat (metronom) >> Tempo
+
+# Frekvenční filrty
+# Fourierka? FFT 

@@ -1,4 +1,4 @@
-from helloworld import*
+# from helloworld import*
 # greeding = 'Hello world!'   # comment, ctrl + /
 #                             #, Python neignoruje prázdná místa na řádku
 # print (greeding)
@@ -46,10 +46,10 @@ for x in range(1,5):
 #     print(x)
 
 
-helloworld()
+# helloworld()
 sum(2,4)
-navrat = returning (1,2)
-print(navrat)
+# navrat = returning (1,2)
+# print(navrat)
 
 
 print ("\n")
