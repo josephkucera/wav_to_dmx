@@ -39,9 +39,14 @@ peak_buffer_index = 0  # index počitadla bufferů
 
 # Funkce pro výpočet BPM z časů mezi špičkami
 def calculate_bpm(peak_times):
+    time_diff = []
     
-    time_diff = np.diff(peak_times)
-    time_diff_mean = np.mean(np.diff(peak_times))  # průměrná rozdíl
+    for i in range(2,7,2):
+        diff = peak_times[i]+FRAMES_PER_BUFFER-peak_times[i-2]+(FRAMES_PER_BUFFER*(peak_times[i+1]-1))
+        time_diff.append(diff)
+    
+    time_diff_mean = np.median(time_diff)
+    
     print (f"\n  rozdíly časů \n {time_diff}\n prum hodnota {time_diff_mean}")
     bpm = (time_diff_mean / (FRAMES_PER_BUFFER) * 0.2 )  # přepočet na s
     bpm = round(60 / bpm)
@@ -69,13 +74,15 @@ def bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index):
     
     elif np.max(buffer_data) > threshold and peak_times_index == 0:  # načtu první špičkovou hodnotu
         peak_times.append(np.argmax(buffer_data))
+        peak_times.append(0)
         peak_buffer_index = 1
         peak_times_index = 1
         print (f"\n hodnota casu 1 {peak_times} a ještě buffer {peak_buffer_index} ")
         return peak_times, peak_times_index, peak_buffer_index
     
     elif np.max(buffer_data) > threshold and peak_times_index == 1:  # načtu první hodnotu, přesáhne threshold
-        peak_times.append(np.argmax(buffer_data) + ((peak_buffer_index-1) * FRAMES_PER_BUFFER)+ peak_times[0])
+        peak_times.append(np.argmax(buffer_data))
+        peak_times.append(peak_buffer_index)
         print (f"\n hodnota casu 2 {peak_times} a ještě buffer {peak_buffer_index} ")
         peak_times_index = 2
         peak_buffer_index = 1
@@ -83,7 +90,8 @@ def bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index):
         return peak_times, peak_times_index, peak_buffer_index
     
     elif np.max(buffer_data) > threshold and peak_times_index == 2:  # načtu první hodnotu, přesáhne threshold
-        peak_times.append(np.argmax(buffer_data) + (peak_buffer_index * FRAMES_PER_BUFFER)+ peak_times[1]) # CHYBA BUDE TADY NĚKDE V TOM PŘIČÍTÁNÍ INDEXŮ
+        peak_times.append(np.argmax(buffer_data))
+        peak_times.append(peak_buffer_index)
         print (f"\n hodnota casu 3 {peak_times} a ještě buffer {peak_buffer_index} ")
         peak_times_index = 3
         peak_buffer_index = 1
@@ -91,7 +99,8 @@ def bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index):
         return peak_times, peak_times_index, peak_buffer_index
     
     elif np.max(buffer_data) > threshold and peak_times_index == 3:
-        peak_times.append(np.argmax(buffer_data) + (peak_buffer_index * FRAMES_PER_BUFFER) + peak_times[2])
+        peak_times.append(np.argmax(buffer_data))
+        peak_times.append(peak_buffer_index)
         print (f"\n hodnota casu 4 {peak_times} a ještě buffer {peak_buffer_index} ")
         calculate_bpm(peak_times)
         peak_times = []  # vyčištění proměnné pro další výpočet bpm
