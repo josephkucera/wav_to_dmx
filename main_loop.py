@@ -2,6 +2,7 @@ import sys
 import pyaudio 
 import numpy as np
 import matplotlib.pyplot as plt
+import bpm_calc as bpm
 
 
 # Parametry pro záznam
@@ -16,6 +17,10 @@ samples_per_second = RATE // FRAMES_PER_BUFFER # Počet úseků na jednu sekundu
 max_amplitude = 32767  # maximální amplituda Pro 16-bitové audio (2 na 16) / 2 
 seconds = 0 # iniciace proměnné pro počítání odběhlého času
 
+# Parametry pro výpočet BPM
+peak_times = []  # Seznam pro uchování časů mezi špičkami
+peak_times_index = 0  # index pro uchování bpm hodnoty
+peak_buffer_index = 0  # index počitadla bufferů
 
 
 # Iniciace PyAudio
@@ -38,20 +43,18 @@ while True:
         # Převedení binárních dat na numpy array a přidání k celkovým datům pro danou sekundu
         signal = np.concatenate((signal, np.frombuffer(buffer_data, dtype=np.int16)))
         
+        peak_times, peak_times_index, peak_buffer_index = bpm.bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRAMES_PER_BUFFER)
+
         # Počet vzorků na jednu sekundu
         if len(signal) >= RATE:  # Jakmile máme vzorky pro 1 sekundu (16000 vzorků)
-            rms = np.sqrt(np.mean(np.square(signal[-RATE:]))) # Výpočet střední efektivní hodnoty (RMS) pro všechny vzorky za tuto sekundu
-
+            # Výpočet střední efektivní hodnoty (RMS) pro všechny vzorky za tuto sekundu
+            rms = np.sqrt(np.mean(np.square(signal[-RATE:])))
             
             # Převod RMS na decibely (dB)
             if rms > 0:  # Abychom předešli dělení nulou
                 dB = 20 * np.log10(rms / max_amplitude)
             else:
                 dB = -np.inf  # Pokud je RMS 0 (např. ticho), vrátíme -nekonečno (nebo můžeš zvolit nějakou jinou hodnotu)
-
-            # Vytisknutí RMS a dB hodnoty pro každou sekundu, s formátováním na 2 desetinná místa
-            seconds = seconds + 1 # jenom simple ukazatel kolik vteřin už odběhlo
-            print(f"RMS (sekunda {seconds}): {rms:.2f}  |  dB: {dB:.2f}")
 
             # Resetování dat pro další sekundu
             signal = np.array([], dtype=np.int16)
@@ -66,15 +69,3 @@ while True:
         
         print("Vykonávám závěrečné kroky...")
         sys.exit(0)  # Ukončí program
-
-# načtu buffer a uložím ho do hodnoty data kam se uloží jako stojové číslo x01 x00 xff apod. 
-# z toho potřebuju načíst víc hodnot 
-# ctrl + . (import neimportované knihovny) 
-# crtl + c (přerušení smyčky)
-
-# Do příště
-# Předělat na "nekonečnou smyčku", Vyprintit RMS za každou "proběhlou" vteřinu (ne buffer ale celá s) ať se vkládá za sebe
-# Nějaký beat detection implementovat (metronom) >> Tempo
-
-# Frekvenční filrty
-# Fourierka? FFT 
