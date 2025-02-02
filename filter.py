@@ -61,11 +61,11 @@ def create_filter(signal, filter_type, fs, f1, f2=None, quality=12):
 
     # Navrhování filtru (butterworth)
     if filter_type == 'HP':
-        b, a = butter(4, low, btype='highpass', output='ba', analog=False)
+        b, a = butter(12, low, btype='highpass', output='ba', analog=False)
     elif filter_type == 'LP':
-        b, a = butter(4, high, btype='lowpass', output='ba', analog=False)
+        b, a = butter(12, high, btype='lowpass', output='ba', analog=False)
     elif filter_type == 'BP':
-        b, a = butter(4, [low, high], btype='bandpass', output='ba', analog=False)
+        b, a = butter(12, [low, high], btype='bandpass', output='ba', analog=False)
 
     # Aplikace filtru
     filtered_signal = lfilter(b, a, signal)
@@ -125,14 +125,14 @@ def generate_signal(fs, duration, f1, f2):
     return signal
 
 # Příklad použití:
-fs = 1000  # vzorkovací frekvence (Hz)
+fs = 16000  # vzorkovací frekvence (Hz)
 duration = 1  # délka signálu (v sekundách)
 
 # Generování součtu dvou sinusových signálů: 1000 Hz a 100 Hz
-signal = generate_signal(fs, duration, 100, 200)
+signal = generate_signal(fs, duration, 2000, 50)
 
 # Použití Low Pass filtru s 12 dB/oktávu a frekvencí 500 Hz
-filtered_signal_lp = create_filter(signal, 'LP', fs, 150, quality=12)
+filtered_signal_lp = create_filter(signal, 'LP', fs, 500, quality=24)
 
 # Zobrazení signálu před a po filtraci
 plot_signal_before_after(signal, filtered_signal_lp)
