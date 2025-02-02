@@ -17,7 +17,7 @@ samples_per_second = RATE // FRAMES_PER_BUFFER # Počet úseků na jednu sekundu
 max_amplitude = 32767  # maximální amplituda Pro 16-bitové audio (2 na 16) / 2 
 seconds = 0 # iniciace proměnné pro počítání odběhlého času
 
-# Parametry pro výpočet BPM
+# Global Parametry pro výpočet BPM
 peak_times = []  # Seznam pro uchování časů mezi špičkami
 peak_times_index = 0  # index pro uchování bpm hodnoty
 peak_buffer_index = 0  # index počitadla bufferů
@@ -39,11 +39,11 @@ print("Začátek nahrávání, ukončení pomocí ctrl+c")
 # Hlavní smyčka pro čtení dat
 while True:
     try:
-        buffer_data = stream.read(FRAMES_PER_BUFFER)
-        # Převedení binárních dat na numpy array a přidání k celkovým datům pro danou sekundu
-        signal = np.concatenate((signal, np.frombuffer(buffer_data, dtype=np.int16)))
+        buffer_data = stream.read(FRAMES_PER_BUFFER) # načítání dat
+       
+        signal = np.concatenate((signal, np.frombuffer(buffer_data, dtype=np.int16)))  # Převedení binárních dat na numpy array a přidání k celkovým datům pro danou sekundu
         
-        peak_times, peak_times_index, peak_buffer_index = bpm.bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRAMES_PER_BUFFER)
+        peak_times, peak_times_index, peak_buffer_index = bpm.bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRAMES_PER_BUFFER) # fce pro výpočet BPM
 
         # Počet vzorků na jednu sekundu
         if len(signal) >= RATE:  # Jakmile máme vzorky pro 1 sekundu (16000 vzorků)
@@ -69,3 +69,12 @@ while True:
         
         print("Vykonávám závěrečné kroky...")
         sys.exit(0)  # Ukončí program
+        
+        
+        # tabulka, co na co má reagovat 
+        # rozmyslet si přesněji co a jak má fungovat, na co má reagovat.
+        # navrhnout systémový design 
+        # Draw.io (systémový návrh) - Blokové schéma
+        # Mělo by to vyplivnout // číslo nebo akci
+        # Autokorelační reaktor // FFT
+        # Nárhové vzory
