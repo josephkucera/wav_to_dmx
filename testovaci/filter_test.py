@@ -1,3 +1,5 @@
+
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import butter, lfilter
 
@@ -70,3 +72,74 @@ def create_filter(signal, filter_type, fs, f1, f2=None, quality=12):
     filtered_signal = lfilter(b, a, signal)
 
     return filtered_signal
+
+
+
+def plot_signal_before_after(signal, filtered_signal):
+    """
+    Funkce pro vykreslení signálu před a po filtraci.
+
+    Parameters:
+    - signal: původní signál (numpy array)
+    - filtered_signal: upravený signál po aplikaci filtru (numpy array)
+    """
+    # Vytvoření grafu
+    plt.figure(figsize=(10, 6))
+
+    # Původní signál
+    plt.subplot(2, 1, 1)
+    plt.plot(signal, color='blue', label='Původní signál')
+    plt.title('Původní signál')
+    plt.xlabel('Vzorky')
+    plt.ylabel('Amplituda')
+    plt.grid(True)
+
+    # Upravený signál
+    plt.subplot(2, 1, 2)
+    plt.plot(filtered_signal, color='red', label='Po filtraci')
+    plt.title('Signál po filtraci')
+    plt.xlabel('Vzorky')
+    plt.ylabel('Amplituda')
+    plt.grid(True)
+
+    # Zobrazení grafu
+    plt.tight_layout()
+    plt.show()
+
+def generate_signal(fs, duration, f1, f2):
+    """
+    Funkce pro generování signálu jako součet dvou sinusových vln (f1 a f2).
+
+    Parameters:
+    - fs: vzorkovací frekvence (Hz)
+    - duration: délka signálu v sekundách
+    - f1: frekvence první složky (Hz)
+    - f2: frekvence druhé složky (Hz)
+
+    Returns:
+    - signal: generovaný signál (numpy array)
+    """
+    t = np.linspace(0, duration, int(fs * duration), endpoint=False)  # časová osa
+    signal_1 = np.sin(2 * np.pi * f1 * t)  # první sinusová vlna
+    signal_2 = np.sin(2 * np.pi * f2 * t)  # druhá sinusová vlna
+
+    # Součet signálů
+    signal = signal_1 + signal_2
+    return signal
+
+# Příklad použití:
+fs = 44100  # vzorkovací frekvence (Hz)
+duration = 1  # délka signálu (v sekundách)
+f1 = 4000
+f2 = 100
+
+# Generování součtu dvou sinusových signálů: 1000 Hz a 100 Hz
+signal = generate_signal(fs, duration, f1, f2)
+
+# Tvorba filtru
+filtered_signal_lp = create_filter(signal, 'LP', fs, 1000, quality=12)
+filtered_signal_lp = create_filter(filtered_signal_lp, 'HP', fs, 50, quality=12)
+# filtered_signal_lp = create_filter(signal, 'BP', fs, 10, 2000, quality=12)
+
+# Zobrazení signálu před a po filtraci
+plot_signal_before_after(signal, filtered_signal_lp)
