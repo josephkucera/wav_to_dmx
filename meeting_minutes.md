@@ -1,11 +1,11 @@
-Josef Diplomka
+## 1
 - svedení se uvidí 
 - vývoj na Raspberry Pi. 5 4GB
     - jaký ADC?
     - DMX interface? USB DMX interface? Využít GPIO?!
     - Jaký programovací jazyk využijem C nebo C++?
 
-
+## 2
 - externí školitel, možná i nějaká kačka, not sure for now.
 - vedený do teoretickýho směru, prostě Filda stuff
 - uživatelský profily, „světlo jako Korsakov“ atp.
@@ -16,26 +16,26 @@ Josef Diplomka
 - Založit GitHub, novej repo, otevřenej/zavřenej, helloworld: konzolová aplikace, vypíše „Hello World!“, 
 - showcase dovedností - funkce, výpis do konzole, objekty? 
 
-
+## 3
 - Prozkoumat možnosti zpracování zvuku v Pythonu. PyAudio.
 - Zapřemýšlet nad algoritmy rozpoznávání parametrů a vůbec si určit jaké parametry chceme sledovat. 
 - algoritmus pro průměrnou hlasitost, program pro zobrazení průměrné hlasitosti/jiného parametru v reálném čase 
 
-
+## 4
 - Zapřemýšlet nad algoritmy rozpoznávání parametrů a vůbec si určit jaké parametry chceme sledovat. 
     - zatím RMS, supr
 - Předělat na nekonečnou smyčku - vypočítávat RMS za celou vteřinu
 - Beat detection?
 - Frekvenční filtry, FFT
 
-
+## 5
 - Detekce BPM funguje s tleksáním, vyzkoušet hudbu
 - Vymyslet nějaký robustní systém, navrhnout blokové schéma
 - Nejvíc mě zajímají „reaktory“ - BPM reaktor, RMS reaktor, 
     - mně by se ještě líbil i Barevný reaktor = Spektrální reaktor
     - Josef: Autokorelační reaktor, detekce tonu kterej hraje.
 
-
+## 6
 - definovat si hodnoty vektoru popisujícího aktuální buffer 
     - downbeat: 0/1
     - RMS: float pásmový?
@@ -45,6 +45,8 @@ Josef Diplomka
 - ideálně nějaký kódový prototyp
 
 
-- vektor:
-    - [
-        - 
+## 7
+```Python
+class BufferVector(NamedTuple):
+    beat: int # from 0..15, number of downbeat, light reaction on 1.
+```
