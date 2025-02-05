@@ -45,7 +45,7 @@
 - ideálně nějaký kódový prototyp
 
 
-## 7
+## 7 API
 Work in porogress:
 ```Python
 @dataclass
@@ -60,3 +60,12 @@ class BufferVector:
     atmosphere: float # 0.. boring/balad/soft, 1..brutal goregrind metal - ???
 
 ```
+
+### Python types
+Python is not "type-safe", but you can sort of turn it on...
+```Python
+foo: int = 1
+bar: float = 12.34
+baz: str = "asdf" 
+```
+In addition, turn on type checking in VS Code,
