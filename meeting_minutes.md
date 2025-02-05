@@ -46,7 +46,17 @@
 
 
 ## 7
+Work in porogress:
 ```Python
-class BufferVector(NamedTuple):
+@dataclass
+class BufferVector:
     beat: int # from 0..15, number of downbeat, light reaction on 1.
+    base_tone: int # 0..6 
+    sharp_diminished: Optional[bool]
+    durr_moll: bool
+    rms_mid: float
+    rms_side: float
+    # VL proposal:
+    atmosphere: float # 0.. boring/balad/soft, 1..brutal goregrind metal - ???
+
 ```
