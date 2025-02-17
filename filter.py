@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.signal import butter, lfilter
 
-def create_filter(signal, filter_type, fs, f1, f2=None,Q = 4):
+def create_filter(signal, filter_type ='HP', fs= 44100, f1=200, f2=None,Q = 4):
     """
     Vytvoří filtr podle typu, kvality, a mezních frekvencí
 
