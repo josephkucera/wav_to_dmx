@@ -68,4 +68,4 @@ foo: int = 1
 bar: float = 12.34
 baz: str = "asdf" 
 ```
-In addition, turn on type checking in VS Code,
+In addition, turn on type checking in VS Code, (python.analysis.type) (ctrl+,)

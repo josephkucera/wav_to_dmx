@@ -43,7 +43,7 @@ while True:
        
         signal = np.concatenate((signal, np.frombuffer(buffer_data, dtype=np.int16)))  # Převedení binárních dat na numpy array a přidání k celkovým datům pro danou sekundu
         
-        peak_times, peak_times_index, peak_buffer_index = bpm.bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRAMES_PER_BUFFER) # fce pro výpočet BPM
+        peak_times, peak_times_index, peak_buffer_index = bpm.bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRAMES_PER_BUFFER) # type: ignore # fce pro výpočet BPM
 
         # Počet vzorků na jednu sekundu
         if len(signal) >= RATE:  # Jakmile máme vzorky pro 1 sekundu (16000 vzorků)
@@ -54,7 +54,7 @@ while True:
             if rms > 0:  # Abychom předešli dělení nulou
                 dB = 20 * np.log10(rms / max_amplitude)
             else:
-                dB = -np.inf  # Pokud je RMS 0 (např. ticho), vrátíme -nekonečno (nebo můžeš zvolit nějakou jinou hodnotu)
+                dB = -np.inf  # Pokud je RMS 0, vrátíme -nekonečno
 
             # Resetování dat pro další sekundu
             signal = np.array([], dtype=np.int16)
@@ -69,12 +69,4 @@ while True:
         
         print("Vykonávám závěrečné kroky...")
         sys.exit(0)  # Ukončí program
-        
-        
-        # tabulka, co na co má reagovat 
-        # rozmyslet si přesněji co a jak má fungovat, na co má reagovat.
-        # navrhnout systémový design 
-        # Draw.io (systémový návrh) - Blokové schéma
-        # Mělo by to vyplivnout // číslo nebo akci
-        # Autokorelační reaktor // FFT
-        # Nárhové vzory
+                
