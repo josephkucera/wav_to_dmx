@@ -69,3 +69,47 @@ bar: float = 12.34
 baz: str = "asdf" 
 ```
 In addition, turn on type checking in VS Code, (python.analysis.type) (ctrl+,)
+
+
+## 8
+- Světla:
+  1. rozchodit HW a odzkoušet na reálném světelném parku. (to je na dlouho, může počkat).
+  1. ~~univerzáálně napsat nějakou knihovnu (?) nebo tak niečo, co by vytvořilo DMX loopback nebo virtuální BUS (?) a rozjet nějaký vizualizér.~~
+- Determinace základního tónu.
+
+### logger
+```Python
+import logging
+import os
+
+"""
+CRITICAL: 50
+ERROR: 40
+WARNING: 30
+INFO: 20
+DEBUG: 10
+NOTSET: 0
+"""
+
+logging.basicConfig(filename="test.log", 
+    level=logging.DEBUG, 
+    format="%(asctime)s:%(levelname)s:%(funcName)s:%(message)s")
+logger = logging.getLogger(__name__)
+
+def test():
+    logger.debug("test function trace")
+    if not os.path.isfile("soubor.txt"):
+        logger.critical("soubor.txt not found")
+        return
+    with open("soubor.txt", "r") as file:
+        print(file.read())
+        logger.debug("soubr precten")
+
+def info():
+    logger.info("info function trace")
+
+info()
+test()
+```
+
+
