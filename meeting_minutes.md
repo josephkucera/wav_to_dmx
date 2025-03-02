@@ -112,4 +112,7 @@ info()
 test()
 ```
 
+- maybe: Upravit konzolový výstup, ať se promazává po každém bufferu. <br> [Hint](https://stackoverflow.com/questions/52118317/how-to-clear-the-console-after-a-line-of-code)
+- [Python Style Guide](https://peps.python.org/pep-0008/)
+
 
