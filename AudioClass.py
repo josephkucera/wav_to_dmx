@@ -71,7 +71,7 @@ class AudioAnalysis:
             - SignalData: Nezpracovaný signál
             Nejprve signál načte, poté ho vyfiltruje a nakonec zanalyzuje
         """
-        SignalData = self.filter(SignalData, 'LP', self.RATE,200)
+       # SignalData = self.filter(SignalData, 'LP', self.RATE,200)
         
         self.bpm, self.peak_boll, self.peak_times, self.peak_times_index, self.peak_buffer_index = bpm.bpm_timing(
             SignalData, self.peak_times, self.peak_times_index, self.peak_buffer_index, self.FRAMES_PER_BUFFER
