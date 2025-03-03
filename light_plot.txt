@@ -1,0 +1,2 @@
+{"name": "Univerzal", "address": 0, "r": 0, "g": 0, "b": 0, "w": 0, "uv": 0, "dim": 0, "fade": 0, "strobo": 0, "pan": 0, "panF": 0, "tilt": 0, "tiltF": 0, "speed": 0, "zoom": 0, "type": "head"}
+{"name": "Par64", "address": 120, "r": 1, "g": 2, "b": 3, "w": 4, "uv": 5, "dim": 6, "fade": 7, "strobo": 8, "type": "par"}
