@@ -1,11 +1,11 @@
 import AudioClass as aud
-# import lights as lights
+import DMX as dmx
 import AudioOutput as AudVector
 
 # vytvoření objektů pro audio analýzu, světla a převodní vektor
-audio = aud.AudioAnalysis()
+audio  = aud.AudioAnalysis()
 vector = AudVector.VectorClass(audio)
-# light = lights.LightsControll()
+# light  = dmx.dmx_controller()
 
 
 print("Začátek nahrávání, ukončení pomocí ctrl+c")
