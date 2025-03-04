@@ -1,4 +1,4 @@
-import DmxControll as d
+import Test.DmxControll as d
 import time
 
 class DmxManager:

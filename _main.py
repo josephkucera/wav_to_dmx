@@ -1,11 +1,12 @@
 import AudioClass as aud
-import DMX as dmx
+import DmxControll as dmx
 import AudioOutput as AudVector
 
 # vytvoření objektů pro audio analýzu, světla a převodní vektor
 audio  = aud.AudioAnalysis()
-vector = AudVector.VectorClass(audio)
-# light  = dmx.dmx_controller()
+light  = dmx.LightManager()
+vector = AudVector.VectorClass(audio,light)
+
 
 
 print("Začátek nahrávání, ukončení pomocí ctrl+c")
@@ -14,8 +15,9 @@ print("Začátek nahrávání, ukončení pomocí ctrl+c")
 while True:
     try:
         audio.AudioProcessing()  # Zpracování zvuku
-        vector.GetInfo()  # Aktualizace hodnoty beat
+        vector.UpdateLights()  # Aktualizace hodnoty beat
 
     except KeyboardInterrupt:
+        light.cleanup()
         audio.cleanup()
 
