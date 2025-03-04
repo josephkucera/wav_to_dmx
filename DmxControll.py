@@ -10,7 +10,7 @@ class LightManager:
     __innit__ připojí ftdi zařízení, vytovří DMX buffer a spustí DMX smyčku, Zároveň inicializuje světla ze souboru
     Metoda set_fixture pro nastavení konkrétních světel v nějakém rozsahu na danou hodnotu.
     """
-    def __init__(self, light_file="light_plot.txt", dmx_frequency=40):
+    def __init__(self, light_file="light_plot.txt", dmx_frequency=45):
         # Získání seznamu připojených FTDI zařízení (DMX převodníků)
         devices = list(Ftdi.list_devices())
         if not devices:
@@ -52,7 +52,7 @@ class LightManager:
         # Prvotní blackout
         self.blackout()
         self.set_lights_white()
-        print("světla nastavena připravena k použití smyčka běží")
+        print("DMX smyčka spuštěna...")
     
     def initialize_lights(self):
         """Inicializuje adresy světel tak, aby odpovídaly indexům v DMX bufferu."""
@@ -82,6 +82,7 @@ class LightManager:
         - min_addr, max_addr: rozsah adres světel
         - fade: doba přechodu na novou hodnotu
         """
+
         for light in self.light_plot.lights:
             # Ověření, zda odpovídá zadanému typu
             if light_type and not isinstance(light, globals().get(light_type, object)):
@@ -100,6 +101,7 @@ class LightManager:
                     self.dmx_data[param_address + light.address] = value  # Okamžitá změna hodnoty
                 if value2:
                     self.dmx_data[param_address + light.address + 1] = value2  # Pokud je třeba nastavit i druhý DMX kanál
+        end_time = time.time()  # Konec měření
     
     def fade_light(self, address, target_value, fade_time):
         """
@@ -178,11 +180,13 @@ class LightManager:
         self.set_fixture(light_type="head", param="tilt", value=127)
     
     def beat_effect(self):
+
         self.set_fixture(light_type="par", max_addr=100, param="dim", value=255, fade=0)
         self.set_fixture(light_type="head", max_addr=100, param="dim", value=255, fade=0)
         time.sleep(0.1)
         self.set_fixture(light_type="par", max_addr=100, param="dim", value=80, fade=300)
         self.set_fixture(light_type="head", max_addr=100, param="dim", value=80, fade=300)
+
 
 
 if __name__ == "__main__":

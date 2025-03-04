@@ -1,11 +1,11 @@
 import AudioClass as aud
 import DmxControll as dmx
-import AudioOutput as AudVector
+import VectorClass as VClass
 
 # vytvoření objektů pro audio analýzu, světla a převodní vektor
 audio  = aud.AudioAnalysis()
 light  = dmx.LightManager()
-vector = AudVector.VectorClass(audio,light)
+vector = VClass.VectorClass(audio,light)
 
 
 
