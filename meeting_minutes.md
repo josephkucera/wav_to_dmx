@@ -116,3 +116,8 @@ test()
 - [Python Style Guide](https://peps.python.org/pep-0008/)
 
 
+## 9
+Yaml - configurační file (light_plot)
+řešit typy světel resp. jejich argumenty pomocí data class?
+Architekrura (multitasking) - Co běží v jakou chvíli 
+Univerzální systém (převodní matice) Převod Audio do Light

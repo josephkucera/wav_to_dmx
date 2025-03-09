@@ -101,7 +101,7 @@ class LightManager:
                     self.dmx_data[param_address + light.address] = value  # Okamžitá změna hodnoty
                 if value2:
                     self.dmx_data[param_address + light.address + 1] = value2  # Pokud je třeba nastavit i druhý DMX kanál
-        end_time = time.time()  # Konec měření
+
     
     def fade_light(self, address, target_value, fade_time):
         """
