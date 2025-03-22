@@ -63,3 +63,4 @@ def find_dominant_frequencies(fft_freq, fft_result, num_peaks=3):
     dominant_frequencies = [(fft_freq[i], fft_result[i]) for i in peak_indices]
     
     return dominant_frequencies
+

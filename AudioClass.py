@@ -119,3 +119,5 @@ class AudioAnalysis:
         print("Vykonávám závěrečné kroky...")
         sys.exit(0)
 
+
+

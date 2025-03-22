@@ -20,6 +20,7 @@ def bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRA
     """ Funkce počítá BPM pouze při dosažení určitého počtu špiček,
         jinak vrací poslední známé BPM.
     """
+    bpm_timing.last_bpm: int
     threshold = 400  # Prahová hodnota pro detekci špičky
     if not hasattr(bpm_timing, "last_bpm"):  
         bpm_timing.last_bpm = 0  # Inicializace pouze při prvním spuštění
@@ -80,3 +81,4 @@ def bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRA
 
         peak_boll = 1
         return bpm_timing.last_bpm, peak_boll, peak_times, peak_times_index, peak_buffer_index
+

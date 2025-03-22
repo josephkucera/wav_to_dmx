@@ -198,3 +198,4 @@ if __name__ == "__main__":
     manager.set_fixture(light_type="par", param="dim", value=0, fade=6000) 
     time.sleep(8)   
     manager.cleanup()  # Ukončení programu
+
