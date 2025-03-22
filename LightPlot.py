@@ -147,3 +147,5 @@ if __name__ == "__main__":
             input("Stiskněte Enter pro pokračování...")
         elif choice == "4":
             break
+
+        

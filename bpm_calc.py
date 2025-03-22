@@ -81,3 +81,4 @@ def bpm_timing(buffer_data, peak_times, peak_times_index, peak_buffer_index, FRA
 
         peak_boll = 1
         return bpm_timing.last_bpm, peak_boll, peak_times, peak_times_index, peak_buffer_index
+

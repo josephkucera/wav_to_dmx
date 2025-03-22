@@ -61,3 +61,4 @@ def create_filter(signal, filter_type ='HP', fs= 44100, f1=200, f2=None,Q = 4):
     filtered_signal = lfilter(b, a, signal)
 
     return filtered_signal
+

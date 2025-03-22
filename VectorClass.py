@@ -65,3 +65,4 @@ class VectorClass:
             self.light_obj.set_lights_red()
         else:
             self.light_obj.set_lights_green()
+
