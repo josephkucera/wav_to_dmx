@@ -1,0 +1,17 @@
+
+x = {"red": [50, 100],
+     "green": [60, 200],
+     "zoom": [0]
+    }
+
+
+
+k = ["r", "g", "fade"]
+
+
+for i in k:
+    value = self.light_plot.get(i) None, 2
+    if not x.get(i):
+        x[i] = [x[value]]
+    else:
+        x[i].append(x[value])

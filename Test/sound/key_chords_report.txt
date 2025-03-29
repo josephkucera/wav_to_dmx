@@ -1,0 +1,14 @@
+Detected notes in range 110-440 Hz:
+  A3: 10 occurrences
+  C4: 10 occurrences
+  D4: 10 occurrences
+  E4: 10 occurrences
+  F4: 10 occurrences
+  F♯4: 10 occurrences
+  G4: 10 occurrences
+  G♯4: 10 occurrences
+  A♯2: 5 occurrences
+  C3: 5 occurrences
+
+Suggested Key: C
+Suggested Chords:

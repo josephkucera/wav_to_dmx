@@ -55,6 +55,8 @@ class VectorClass:
         beat = self.GetBeat()
         bpm = self.GetBpm()
         
+        tab_x = {1: "red"}
+        
         if beat > 0:
             self.light_obj.beat_effect()
             print("bum bum beat")
