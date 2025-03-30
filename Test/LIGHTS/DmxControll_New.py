@@ -3,15 +3,12 @@ import json
 import time
 import threading
 from pyftdi.ftdi import Ftdi
-import math
 
 
 class DMXController:
-    """Udržuje DMX buffer a poskytuje metody pro práci s jednotlivými kanály."""
     def __init__(self):
         self.buffer = [0] * 512
         self.lock = threading.Lock()
-        self.update = lambda: None  # Přepíše se zvenku, např. LightManagerem
 
     def set_value(self, address, value):
         if 0 <= address < 512:
@@ -24,6 +21,9 @@ class DMXController:
                 return self.buffer[address]
         return 0
 
+    def update(self):
+        pass
+
 
 class Light:
     """Základní třída světla, sdílí jméno, adresu a přístup k DMX controlleru."""
@@ -32,6 +32,7 @@ class Light:
         self.address = address
         self.dmx = dmx
         self._fade_threads = {}
+        self.channels = {}  # Mapování parametrů (např. 'r', 'g', 'pan') na adresy
 
     def __str__(self):
         return json.dumps(self.to_dict(), ensure_ascii=False)
@@ -53,7 +54,19 @@ class Light:
         }
         return light_classes[light_type](dmx=dmx, **data)
 
-    def _fade_single(self, addr, target, duration):
+    def init_channels(self, data):
+        """Inicializuje mapu kanálů podle offsetů v načtených datech."""
+        for param, offset in data.items():
+            if isinstance(offset, int) and offset > 0:
+                self.channels[param] = self.address + (offset - 1)
+
+    def set_param(self, param, value):
+        """Nastaví daný parametr světla na hodnotu pomocí interpolace."""
+        if param in self.channels:
+            addr = self.channels[param]
+            self._fade_single(addr, value)
+
+    def _fade_single(self, addr, target, duration=0.5):
         if addr in self._fade_threads:
             self._fade_threads[addr].set()
 
@@ -75,68 +88,58 @@ class Light:
 
 
 class Dimr(Light):
-    def __init__(self, name, address, dim, dmx):
+    def __init__(self, name, address, dmx, **kwargs):
         super().__init__(name, address, dmx)
-        self.dim = dim
+        self.init_channels(kwargs)
 
-    def set_dim(self, value, fade=0):
-        self._fade_single(self.address, value, fade)
+    def set_dim(self, value):
+        self.set_param("dim", value)
+
+
 class Par(Light):
-    def __init__(self, name, address, r, g, b, w, uv, dim, fade, strobo, dmx):
+    def __init__(self, name, address, dmx, **kwargs):
         super().__init__(name, address, dmx)
-        self.r = r
-        self.g = g
-        self.b = b
-        self.w = w
-        self.uv = uv
-        self.dim = dim
-        self.fade = fade
-        self.strobo = strobo
+        self.init_channels(kwargs)
 
-    def set_color(self, r, g, b, w=0, uv=0, fade=0):
-        channels = [r, g, b, w, uv]
-        for i, val in enumerate(channels):
-            self._fade_single(self.address + i, val, fade)
+    def set_color(self, r=0, g=0, b=0, w=0, uv=0):
+        for param, val in zip(["r", "g", "b", "w", "uv"], [r, g, b, w, uv]):
+            self.set_param(param, val)
 
-    def set_dim(self, value, fade=0):
-        self._fade_single(self.address + 5, value, fade)
+    def set_dim(self, value):
+        self.set_param("dim", value)
 
     def set_strobe(self, value):
-        self.dmx.set_value(self.address + 7, value)
+        self.set_param("strobo", value)
 
 
 class Head(Par):
-    def __init__(self, name, address, r, g, b, w, uv, dim, fade, strobo, pan, panF, tilt, tiltF, speed, zoom, dmx):
-        super().__init__(name, address, r, g, b, w, uv, dim, fade, strobo, dmx)
-        self.pan = pan
-        self.panF = panF
-        self.tilt = tilt
-        self.tiltF = tiltF
-        self.speed = speed
-        self.zoom = zoom
+    def __init__(self, name, address, dmx, base_pan=127, base_tilt=127, **kwargs):
+        super().__init__(name, address, dmx, **kwargs)
+        self.base_pan = base_pan
+        self.base_tilt = base_tilt
 
-    def set_position(self, pan, tilt, fade=0):
-        self._fade_single(self.address + 8, pan, fade)
-        self._fade_single(self.address + 10, tilt, fade)
+    def set_position(self, pan, tilt):
+        self.set_param("pan", pan)
+        self.set_param("tilt", tilt)
 
-    def set_movement_speed(self, speed):
-        self.dmx.set_value(self.address + 12, speed)
+    def set_movement_speed(self, value):
+        self.set_param("speed", value)
 
-    def set_zoom(self, zoom):
-        self.dmx.set_value(self.address + 13, zoom)
+    def set_zoom(self, value):
+        self.set_param("zoom", value)
 
 
 class Haze(Light):
-    def __init__(self, name, address, haze, fan, dmx):
+    def __init__(self, name, address, dmx, **kwargs):
         super().__init__(name, address, dmx)
-        self.haze = haze
-        self.fan = fan
+        self.init_channels(kwargs)
 
     def set_haze(self, value):
-        self.dmx.set_value(self.address, value)
+        self.set_param("haze", value)
 
     def set_fan(self, value):
-        self.dmx.set_value(self.address + 1, value)
+        self.set_param("fan", value)
+
 
 
 class LightPlot:
@@ -149,16 +152,14 @@ class LightPlot:
     def load_lights(self):
         if not os.path.exists(self.filename):
             print("Soubor nenalezen, vytvářím nový se vzorovým světlem.")
-            self.lights.append(Head("Univerzal", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, dmx=self.dmx))
-            self.save_lights()
-        else:
-            with open(self.filename, "r", encoding="utf-8") as file:
-                for line in file:
-                    line = line.strip()
-                    if not line:
-                        continue  # ⬅️ přeskočíme prázdný řádek
-                    data = json.loads(line)
-                    self.lights.append(Light.from_dict(data, self.dmx))
+            return
+        with open(self.filename, "r", encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                self.lights.append(Light.from_dict(data, self.dmx))
 
     def save_lights(self):
         with open(self.filename, "w", encoding="utf-8") as file:
@@ -186,32 +187,22 @@ class LightManager:
         devices = list(Ftdi.list_devices())
         if not devices:
             raise RuntimeError("Žádné FTDI zařízení nenalezeno.")
-        print("Nalezená zařízení:")
-        for dev in devices:
-            print(dev)
         first_device = devices[0][0]
         vid, pid = first_device.vid, first_device.pid
 
         self.ftdi = Ftdi()
-        try:
-            self.ftdi.open(vid, pid)
-        except OSError as e:
-            raise RuntimeError(f"Nepodařilo se otevřít FTDI zařízení: {e}")
-
+        self.ftdi.open(vid, pid)
         self.ftdi.set_baudrate(250000)
         self.ftdi.set_line_property(8, 2, 'N')
 
         self.dmx = DMXController()
         self.dmx.update = self._send_dmx_data
-
         self.light_plot = LightPlot(light_file, self.dmx)
 
         self.running = True
         self.dmx_frequency = dmx_frequency
         self.dmx_thread = threading.Thread(target=self.dmx_loop, daemon=True)
         self.dmx_thread.start()
-
-        print("DMX smyčka spuštěna...")
 
     def _send_dmx_data(self):
         self.ftdi.set_break(True)
@@ -225,135 +216,23 @@ class LightManager:
             time.sleep(interval)
 
     def cleanup(self):
-        print("Odpojuji DMX kontrolér...")
         self.running = False
         self.dmx_thread.join()
         self.ftdi.close()
-        
-
-class SceneManager:
-    def __init__(self, light_plot):
-        self.light_plot = light_plot
-        # Rozdělení světel do kategorií podle DMX adres
-        self.ranges = {
-            "bass": (0, 61),
-            "mid": (61, 151),
-            "high": (151, 231)
-        }
-
-    def get_lights_in_range(self, start, end):
-        return [light for light in self.light_plot.lights if start <= light.address < end]
-
-    def get_group_lights(self, group_name):
-        if group_name in self.ranges:
-            start, end = self.ranges[group_name]
-            return self.get_lights_in_range(start, end)
-        return []
-
-    def blackout(self, fade=0.5):
-        for light in self.light_plot.lights:
-            if hasattr(light, 'set_dim'):
-                light.set_dim(0, fade=fade)
-
-    def set_color_for_group(self, group, color, fade=1.0):
-        r, g, b = color
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_color'):
-                light.set_color(r, g, b, fade=fade)
-
-    def set_dim_for_group(self, group, value, fade=1.0):
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_dim'):
-                light.set_dim(value, fade=fade)
-
-    def pulse_on_beat(self, group, intensity=255, fade=0.2):
-        """Rozsvítí světla v dané skupině na momentální beat a pak zhasne."""
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_dim'):
-                light.set_dim(intensity, fade=fade)
-        time.sleep(fade)
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_dim'):
-                light.set_dim(0, fade=fade)
-
-    def gradient_across_group(self, group, colors, fade=1.0):
-        """Barevný gradient podle adresy – přechází mezi barvami zleva doprava."""
-        lights = self.get_group_lights(group)
-        count = len(lights)
-        if count == 0 or len(colors) < 2:
-            return
-
-        for i, light in enumerate(lights):
-            ratio = i / (count - 1) if count > 1 else 0
-            index = ratio * (len(colors) - 1)
-            low = int(index)
-            high = min(low + 1, len(colors) - 1)
-            t = index - low
-            r = int(colors[low][0] * (1 - t) + colors[high][0] * t)
-            g = int(colors[low][1] * (1 - t) + colors[high][1] * t)
-            b = int(colors[low][2] * (1 - t) + colors[high][2] * t)
-            if hasattr(light, 'set_color'):
-                light.set_color(r, g, b, fade=fade)
-
-    def set_position_for_group(self, group, pan, tilt, fade=1.0):
-        """Nastaví všem hlavám ve skupině pozici."""
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_position'):
-                light.set_position(pan, tilt, fade=fade)
-
-    def offset_position_for_group(self, group, pan_offset=0, tilt_offset=0, fade=1.0):
-        """Uhne všem hlavám od jejich aktuální základní pozice."""
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_position') and hasattr(light, 'pan') and hasattr(light, 'tilt'):
-                target_pan = light.pan + pan_offset
-                target_tilt = light.tilt + tilt_offset
-                light.set_position(target_pan, target_tilt, fade=fade)
-
-    def set_zoom_for_group(self, group, value):
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_zoom'):
-                light.set_zoom(value)
-
-    def set_speed_for_group(self, group, value):
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_movement_speed'):
-                light.set_movement_speed(value)
-                
-    def set_dim_all(self, value, fade=1.0):
-        for group in self.ranges.keys():
-            self.set_dim_for_group(group, value, fade=fade)
-
-
-    def wave_motion(self, group="high", pan=127, tilt_amplitude=40, steps=6, fade=1.0, delay=0.4):
-        """Simuluje vlnu pomocí různého tilt úhlu pro každou hlavu ve skupině."""
-        heads = [light for light in self.get_group_lights(group) if hasattr(light, 'set_position')]
-        count = len(heads)
-
-        for step in range(steps):
-            for i, light in enumerate(heads):
-                angle = math.sin((step + i / count) * math.pi * 2 / steps)
-                tilt = int(127 + angle * tilt_amplitude)
-                light.set_position(pan, tilt, fade=fade)
-            time.sleep(delay)
 
 
 class SimulatorManager:
-    """Simuluje DMX komunikaci bez FTDI zařízení – ideální pro testování."""
-    def __init__(self, light_file="light_plot.txt", dmx_frequency=1):
+    def __init__(self, light_file="light_plot.txt", dmx_frequency=2):
         self.dmx = DMXController()
         self.dmx.update = self._simulate_dmx_output
-
         self.light_plot = LightPlot(light_file, self.dmx)
-
         self.running = True
         self.dmx_frequency = dmx_frequency
         self.dmx_thread = threading.Thread(target=self.dmx_loop, daemon=True)
         self.dmx_thread.start()
-
         print("Simulátor DMX spuštěn...")
 
     def _simulate_dmx_output(self):
-        # Vypíše hodnoty v bufferu, kde došlo ke změně
         active_channels = [(i, val) for i, val in enumerate(self.dmx.buffer) if val > 0]
         if active_channels:
             print("Aktivní kanály:")
@@ -372,55 +251,141 @@ class SimulatorManager:
         self.running = False
         self.dmx_thread.join()
 
-    def set_all_color(light_plot, r, g, b, fade=1.0):
-        for light in light_plot.lights:
-            if isinstance(light, Par):
-                light.set_color(r, g, b, fade=fade)
 
-import time
+class SceneManager:
+    def __init__(self, light_plot):
+        self.light_plot = light_plot
+        self.ranges = {
+            "bass": (0, 41),
+            "midA": (41, 81),
+            "midB": (81, 121),
+            "midC": (121, 161),
+            "highA": (161, 196),
+            "highB": (196, 231)
+        }
+
+    def get_lights_in_range(self, start, end):
+        return [light for light in self.light_plot.lights if start <= light.address < end]
+
+    def get_group_lights(self, group_name):
+        if group_name in self.ranges:
+            start, end = self.ranges[group_name]
+            return self.get_lights_in_range(start, end)
+        return []
+
+    def blackout(self):
+        for light in self.light_plot.lights:
+            if hasattr(light, 'set_dim'):
+                light.set_dim(0)
+
+    def set_color_for_group(self, group, color):
+        """
+        Nastaví barvu světel ve skupině. Podporuje RGB a volitelně W a UV.
+        Parametr `color` může být (r, g, b), (r, g, b, w) nebo (r, g, b, w, uv)
+        """
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_color'):
+                r, g, b = color[0], color[1], color[2]
+                w = color[3] if len(color) > 3 else 0
+                uv = color[4] if len(color) > 4 else 0
+
+                supports_w = "w" in getattr(light, "channels", {})
+                supports_uv = "uv" in getattr(light, "channels", {})
+
+                light.set_color(
+                    r, g, b,
+                    w=w if supports_w else 0,
+                    uv=uv if supports_uv else 0
+                )
+
+    def set_dim_for_group(self, group, value):
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_dim'):
+                light.set_dim(value)
+
+    def pulse_on_beat(self, group, intensity=255):
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_dim'):
+                light.set_dim(intensity)
+        time.sleep(0.2)
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_dim'):
+                light.set_dim(0)
+
+    def set_zoom_for_group(self, group, value):
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_zoom'):
+                light.set_zoom(value)
+
+    def set_movement_for_group(self, group, pan=None, tilt=None, speed=None):
+        """
+        Nastaví pozici a/nebo rychlost pohybu světel ve skupině.
+        Automaticky použije i 16bit verzi (panF, tiltF), pokud ji světlo má.
+        """
+        for light in self.get_group_lights(group):
+            # Nastavení pozice
+            if pan is not None or tilt is not None:
+                if hasattr(light, "channels"):
+                    if pan is not None and "pan" in light.channels:
+                        light.set_param("pan", pan)
+                        if "panF" in light.channels:
+                            light.set_param("panF", 0)  # nebo jemná hodnota dle potřeby
+                    if tilt is not None and "tilt" in light.channels:
+                        light.set_param("tilt", tilt)
+                        if "tiltF" in light.channels:
+                            light.set_param("tiltF", 0)  # nebo jemná hodnota dle potřeby
+
+            # Nastavení rychlosti
+            if speed is not None and hasattr(light, "set_movement_speed"):
+                light.set_movement_speed(speed)
+
+    def set_dim_all(self, value):
+        for group in self.ranges.keys():
+            self.set_dim_for_group(group, value)
 
 if __name__ == "__main__":
+    from pathlib import Path
+
+    # Ověříme, že soubor existuje nebo vytvoříme ukázkový
+    if not Path("light_plot.txt").exists():
+        with open("light_plot.txt", "w", encoding="utf-8") as f:
+            f.write('{"type": "par", "name": "Par 1", "address": 1, "r": 1, "g": 2, "b": 3, "dim": 4}\n')
+            f.write('{"type": "par", "name": "Par 2", "address": 51, "r": 1, "g": 2, "b": 3, "dim": 4}\n')
+            f.write('{"type": "head", "name": "Head 1", "address": 101, "r": 1, "g": 2, "b": 3, "dim": 4, "pan": 5, "tilt": 6, "speed": 7, "zoom": 8, "base_pan": 127, "base_tilt": 127}\n')
+
     manager = None
     try:
-
-        manager = SimulatorManager("light_plot.txt", dmx_frequency=2)
+        manager = SimulatorManager("light_plot.txt", dmx_frequency=10)
         scenes = SceneManager(manager.light_plot)
 
         print("Zapínám všechna světla...")
-        scenes.set_dim_all(255, fade=1.0)
+        scenes.set_dim_all(255)
 
-        print("Nastavuji barvy podle skupin...")
-        scenes.set_color_for_group("bass", (255, 0, 0), fade=1.0)   # červená
-        scenes.set_color_for_group("mid", (0, 0, 255), fade=1.0)    # modrá
-        scenes.set_color_for_group("high", (0, 255, 0), fade=1.0)   # zelená
+        print("Nastavuji barvy...")
+        scenes.set_color_for_group("bass", (255, 0, 0))   # červená
+        scenes.set_color_for_group("midA", (0, 0, 255))   # modrá
+        scenes.set_color_for_group("highB", (0, 255, 0))  # zelená
         time.sleep(3)
 
         print("Pulz na beat pro BASS...")
-        scenes.pulse_on_beat("bass", intensity=255, fade=0.3)
+        scenes.pulse_on_beat("bass", intensity=255)
         time.sleep(1)
 
-        print("Gradient across MID...")
-        scenes.gradient_across_group("mid", [(255, 0, 0), (0, 0, 255)], fade=1.0)
-        time.sleep(3)
-
-        print("Pohyb hlav do základní pozice...")
-        scenes.set_position_for_group("high", pan=127, tilt=127, fade=1.0)
+        print("Pohyb hlav...")
+        scenes.set_movement_for_group("highB", pan=127, tilt=127, speed=10)
         time.sleep(1)
-
-        print("Vlnový pohyb hlav...")
-        scenes.wave_motion(group="high", pan=127, tilt_amplitude=40, steps=8, fade=0.5, delay=0.3)
 
         print("Zoom a speed...")
-        scenes.set_zoom_for_group("high", 200)
-        scenes.set_speed_for_group("high", 180)
+        scenes.set_zoom_for_group("highB", 200)
         time.sleep(2)
 
         print("Blackout všech světel...")
-        scenes.blackout(fade=2.0)
+        scenes.blackout()
 
-        input("Stiskněte Enter pro ukončení...")
+        input("\n \n \n \n Stiskněte Enter pro ukončení...\n \n \n \n \n \n")
 
     finally:
         if manager:
             manager.cleanup()
+
 

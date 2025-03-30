@@ -7,6 +7,7 @@ import scipy.signal
 from sklearn.decomposition import NMF
 import json
 from pathlib import Path
+from collections import Counter
 
 class NMFPlotter:
     def __init__(self, stft, activations, bases, sr, n_fft, highlighted_ranges):
@@ -97,12 +98,14 @@ class DecomposeNMF:
         self.original_phases = np.angle(self.stft)
         self.bases, self.activations = self.decompose(self.original_mags)
         self.exporter = NMFExporter(audio_path, self.sr, self.n_components, self.n_fft, self.hop_length, self.activations, self.bases)
+        self.top_frequencies = []
+        self.notes = []
 
     def hz_to_note_name(self, hz):
         return librosa.hz_to_note(hz)
 
     def decompose(self, mags):
-        nmf_model = NMF(n_components=self.n_components, solver='mu', beta_loss='itakura-saito')
+        nmf_model = NMF(n_components=self.n_components, solver='mu', beta_loss='itakura-saito', max_iter=600)
         acts = nmf_model.fit_transform(np.transpose(mags))
         bases = nmf_model.components_
         acts = np.transpose(acts)
@@ -136,16 +139,20 @@ class DecomposeNMF:
         num_bands = len(octave_edges) - 1
         band_votes = []
 
+        self.top_frequencies = []  # reset před novým výpočtem
+
         for i, basis in enumerate(self.bases):
             top_indices = np.argsort(basis)[-3:][::-1]
             top_freqs = freqs[top_indices]
+            self.top_frequencies.append(top_freqs.tolist())  # uložení top frekvencí
+
             note_names = [self.hz_to_note_name(f) for f in top_freqs]
             print(f"Component {i} top frequencies:")
             for f, note in zip(top_freqs, note_names):
                 print(f"  {f:.2f} Hz ({note})")
             for f in top_freqs:
                 for j in range(num_bands):
-                    if octave_edges[j] <= f < octave_edges[j+1]:
+                    if octave_edges[j] <= f < octave_edges[j + 1]:
                         band_votes.append((i, j))
 
         vote_matrix = np.zeros((len(self.bases), num_bands))
@@ -199,6 +206,62 @@ class DecomposeNMF:
             self.bases[i] = filtered_basis
             self.highlighted_ranges.append((low_freq, high_freq))
             print(f"Component {i}: Assigned unique band {low_freq:.1f} Hz - {high_freq:.1f} Hz")
+            
+    def analyse_top_frequencies(self):
+        if not self.top_frequencies:
+            print("Nejdříve zavolej assign_frequency_bins().")
+            return
+
+        print(f"\n\nObsah proměnné print top freq {self.top_frequencies}")
+
+        all_classes = []
+        self.notes = []  # reset
+
+        for i, freqs in enumerate(self.top_frequencies):
+            midi_notes = librosa.hz_to_midi(freqs)
+            midi_notes_rounded = np.round(midi_notes).astype(int)
+            midi_classes = (midi_notes_rounded % 12) + 1
+
+            print(f"\nComponent {i}:")
+            print(f"  MIDI noty: {midi_notes_rounded}")
+            print(f"  Tónové třídy (1–12): {midi_classes}")
+
+            all_classes.extend(midi_classes.tolist())
+
+        # Spočítej výskyt a vyber 3 nejčastější
+        counter = Counter(all_classes)
+        most_common_classes = [note for note, count in counter.most_common(3)]
+        sorted_notes = sorted(most_common_classes)
+        print(f"\nNejčastější 3 tónové třídy (nezávisle na oktávě): {sorted_notes}")
+
+        # Výchozí hodnota typu akordu (0 = neznámý)
+        chord_code = 0
+
+        # Výpočet intervalů od root noty
+        root = sorted_notes[0]
+        intervals = [(n - root) % 12 for n in sorted_notes]
+        print(f"  Intervaly od rootu {root}: {sorted(intervals)}")
+
+        interval_patterns = {
+            1: [0, 4, 7],     # major
+            2: [0, 3, 7],     # minor
+            3: [0, 3, 6],     # diminished
+            4: [0, 2, 7],     # sus2
+            5: [0, 5, 7],     # sus4
+            6: [0, 4, 8],     # augmented
+            7: [0, 4, 6],     # major flat 5
+            8: [0, 2, 8],     # sus2♯5
+            9: [0, 5, 10],    # quartal
+        }
+
+        for code, pattern in interval_patterns.items():
+            if sorted(intervals) == pattern:
+                chord_code = code
+                break
+
+        self.notes = sorted_notes + [chord_code]
+        print(f"  → Výstupní struktura self.notes: {self.notes}")
+
 
     def resynthesize(self, normalize=True):
         resynthesized_mags = [self._make_mags_from_basis_and_activation(self.activations[i], self.bases[i]) for i in range(self.n_components)]
@@ -229,11 +292,12 @@ class DecomposeNMF:
 
 def main():
     audio_path = "Test/sound/mixdown.wav"
-    model = DecomposeNMF(audio_path, n_components=5, n_fft=4096)
+    model = DecomposeNMF(audio_path, n_components=5, n_fft=8192) # 8192, 4096 
     model.apply_filters()
-    model.export_json()
-    model.resynthesize(normalize=True)
-    model.plot()
+    # model.export_json()
+    # model.resynthesize(normalize=True)
+    # model.plot()
+    model.analyse_top_frequencies()
 
 if __name__ == '__main__':
     main()

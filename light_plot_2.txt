@@ -1,0 +1,9 @@
+{"name": "Univerzal", "address": 0, "r": 0, "g": 0, "b": 0, "w": 0, "uv": 0, "dim": 0, "strobo": 0, "pan": 0, "panF": 0, "tilt": 0, "tiltF": 0, "speed": 0, "zoom": 0, "type": "head"}
+{"name": "Par5ch", "address": 1, "r": 1, "g": 2, "b": 54, "w": 0, "uv": 4, "dim": 5, "strobo": 0, "type": "par"}
+{"name": "Par5ch", "address": 10, "r": 1, "g": 2, "b": 55, "w": 0, "uv": 4, "dim": 5, "strobo": 0, "type": "par"}
+{"name": "Par5ch", "address": 20, "r": 1, "g": 2, "b": 55, "w": 0, "uv": 4, "dim": 5, "strobo": 0, "type": "par"}
+{"name": "Par5ch", "address": 30, "r": 1, "g": 2, "b": 55, "w": 0, "uv": 4, "dim": 5, "strobo": 0, "type": "par"}
+{"name": "Par5ch", "address": 40, "r": 1, "g": 2, "b": 55, "w": 0, "uv": 4, "dim": 5, "strobo": 0, "type": "par"}
+{"name": "Par5ch", "address": 50, "r": 1, "g": 2, "b": 55, "w": 0, "uv": 4, "dim": 5, "strobo": 0, "type": "par"}
+{"name": "Par5ch", "address": 60, "r": 1, "g": 2, "b": 55, "w": 0, "uv": 4, "dim": 5, "strobo": 0, "type": "par"}
+
