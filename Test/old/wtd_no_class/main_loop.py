@@ -2,7 +2,7 @@ import sys
 import pyaudio 
 import numpy as np
 import matplotlib.pyplot as plt
-import bpm_calc as bpm
+import Nopipeline.bpm_calc as bpm
 
 
 # Parametry pro záznam

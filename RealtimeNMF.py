@@ -215,6 +215,7 @@ class DecomposeNMF:
             midi_notes = librosa.hz_to_midi(freqs)
             midi_notes = midi_notes[~np.isnan(midi_notes)]
             midi_notes_rounded = np.round(midi_notes).astype(int)
+            # midi_classes = midi_classes +1 #offset ladění
             midi_classes = (midi_notes_rounded % 12) + 1
             all_classes.extend(midi_classes.tolist())
 

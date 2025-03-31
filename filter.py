@@ -1,63 +1,61 @@
 import numpy as np
-from scipy.signal import butter, lfilter
+from scipy.signal import butter, filtfilt
 
-def create_filter(signal, filter_type ='HP', fs= 44100, f1=200, f2=None,Q = 4):
+def create_filter(signal, filter_type='HP', fs=44100, f1=200, f2=None, Q=4):
     """
-    Vytvoří filtr podle typu, kvality, a mezních frekvencí
+    Vytvoří filtr podle typu, kvality a mezních frekvencí
 
-    Parametry
+    Parametry:
     - signal: vstupní signál (numpy array)
-    - filter_type: 'HP' pro Horní Propust, 'LP' pro Dolní Propust, 'BP' pro Pásmovou Propust
+    - filter_type: 'HP' (High Pass), 'LP' (Low Pass), 'BP' (Band Pass)
     - fs: vzorkovací frekvence (Hz)
-    - f1: mezní frekvence (Hz) (dolní pokud je BP filtr)
-    - f2: horní mezní frekvence (pokud je použitý BP filtr)
-    - Q: Kvalita filtru resp. Ntý řád filtru (standardně 4)
-        - Pokles = Q*6 dB / Oktávu (standardně 24 dB/okt)
+    - f1: dolní mezní frekvence (nebo hlavní u HP/LP)
+    - f2: horní mezní frekvence (pouze pro BP)
+    - Q: řád filtru (standardně 4, pokles = Q*6 dB/okt)
 
     Vrací:
-    - filtrovaný signál 
+    - filtrovaný signál
     """
 
-    # Nastavení typu filtru
-    if filter_type == 'HP':  # High Pass
+    # Nastavení mezních frekvencí
+    if filter_type == 'HP':
         lowcut = f1
         highcut = None
-    elif filter_type == 'LP':  # Low Pass
+    elif filter_type == 'LP':
         lowcut = None
         highcut = f1
-    elif filter_type == 'BP':  # Band Pass
+    elif filter_type == 'BP':
         lowcut = f1
         highcut = f2
     else:
         raise ValueError("Neplatný typ! Použijte 'HP', 'LP' nebo 'BP'.")
 
-    # Výpočet parametrů filtru
-    nyquist = 0.5 * fs # nyquistův teorém 
-    low = lowcut / nyquist if lowcut is not None else None # normalizace mezní frekvence
-    high = highcut / nyquist if highcut is not None else None # normalizace mezní frekvence
+    # Normalizace podle Nyquistovy frekvence
+    nyquist = 0.5 * fs
+    low = lowcut / nyquist if lowcut is not None else None
+    high = highcut / nyquist if highcut is not None else None
 
-    # Ověření, že kritické frekvence jsou v rozsahu (0, 1) po normalizaci
     if low is not None and (low <= 0 or low >= 1):
         raise ValueError(f"Pro filtr {filter_type} musí být 'lowcut' mezi 0 a {nyquist} Hz.")
     if high is not None and (high <= 0 or high >= 1):
-        if high == 1:  # U Low Pass filtru nemůže být `highcut` rovno Nyquistově frekvenci
-            raise ValueError(f"Pro filtr {filter_type} musí být 'highcut' menší než Nyquistova frekvence ({nyquist} Hz).")
         raise ValueError(f"Pro filtr {filter_type} musí být 'highcut' mezi 0 a {nyquist} Hz.")
 
-    # Pokud je lowcut None a používáme LP filtr nebo highcut None a používáme HP filtr, tak to znamená, že máme chybu v parametrech.
-    
     if (filter_type == 'HP' and lowcut is None) or (filter_type == 'LP' and highcut is None):
         raise ValueError(f"Pro filtr typu {filter_type} musí být specifikována frekvence.")
 
-    # Návrh filtru (butterworth)
+    # Návrh filtru
     if filter_type == 'HP':
-        b, a = butter(Q, low, btype='highpass', output='ba', analog=False)
+        b, a = butter(Q, low, btype='highpass', analog=False)
     elif filter_type == 'LP':
-        b, a = butter(Q, high, btype='lowpass', output='ba', analog=False)
+        b, a = butter(Q, high, btype='lowpass', analog=False)
     elif filter_type == 'BP':
-        b, a = butter(Q, [low, high], btype='bandpass', output='ba', analog=False)
+        b, a = butter(Q, [low, high], btype='bandpass', analog=False)
 
-    # Aplikace filtru
-    filtered_signal = lfilter(b, a, signal)
+    # Aplikace filtru s ochranou
+    try:
+        filtered_signal = filtfilt(b, a, signal)
+    except ValueError as e:
+        print(f"[Filter Warning] Chyba při filtraci: {e}")
+        return np.zeros_like(signal)
 
     return filtered_signal

@@ -9,7 +9,7 @@ def simulate_realtime_analysis(audio_path, buffer_size=44100, hop=22050, sr=4410
     duration = len(signal) / sr
     print(f"Načten zvuk: {audio_path}, délka: {duration:.2f} s, samplerate: {sr} Hz")
 
-    nmf = DecomposeNMF(sr=sr, n_components=5, n_fft=2048)
+    nmf = DecomposeNMF(sr=sr, n_components=5, n_fft=4096)
 
     for i in range(0, len(signal) - buffer_size, hop):
         start_time = time.time()
@@ -21,7 +21,7 @@ def simulate_realtime_analysis(audio_path, buffer_size=44100, hop=22050, sr=4410
         if rms < rms_threshold:
             print(f"⏸ Frame {i//hop} ({t:.2f}s): ticho (RMS = {rms:.6f}), přeskakuji... ")
             continue
-
+ 
         notes = nmf.analyze_buffer(frame, normalize=True)
         end_time = time.time()
         print(f"▶ Frame {i//hop} ({t:.2f}s): {notes}")

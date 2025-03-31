@@ -1,200 +1,391 @@
+import os
+import json
 import time
 import threading
 from pyftdi.ftdi import Ftdi
-from LightPlot import LightPlot
+
+
+class DMXController:
+    def __init__(self):
+        self.buffer = [0] * 512
+        self.lock = threading.Lock()
+
+    def set_value(self, address, value):
+        if 0 <= address < 512:
+            with self.lock:
+                self.buffer[address] = max(0, min(255, value))
+
+    def get_value(self, address):
+        if 0 <= address < 512:
+            with self.lock:
+                return self.buffer[address]
+        return 0
+
+    def update(self):
+        pass
+
+
+class Light:
+    """Základní třída světla, sdílí jméno, adresu a přístup k DMX controlleru."""
+    def __init__(self, name, address, dmx):
+        self.name = name
+        self.address = address
+        self.dmx = dmx
+        self._fade_threads = {}
+        self.channels = {}  # Mapování parametrů (např. 'r', 'g', 'pan') na adresy
+
+    def __str__(self):
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+    def to_dict(self):
+        data = {**self.__dict__, "type": type(self).__name__.lower()}
+        data.pop("dmx", None)
+        data.pop("_fade_threads", None)
+        return data
+
+    @staticmethod
+    def from_dict(data, dmx):
+        light_type = data.pop("type")
+        light_classes = {
+            "dimr": Dimr,
+            "par": Par,
+            "head": Head,
+            "haze": Haze
+        }
+        return light_classes[light_type](dmx=dmx, **data)
+
+    def init_channels(self, data):
+        """Inicializuje mapu kanálů podle offsetů v načtených datech."""
+        for param, offset in data.items():
+            if isinstance(offset, int) and offset > 0:
+                self.channels[param] = self.address + (offset - 1)
+
+    def set_param(self, param, value):
+        """Nastaví daný parametr světla na hodnotu pomocí interpolace."""
+        if param in self.channels:
+            addr = self.channels[param]
+            self._fade_single(addr, value)
+
+    def _fade_single(self, addr, target, duration=0.5):
+        if addr in self._fade_threads:
+            self._fade_threads[addr].set()
+
+        stop_event = threading.Event()
+        self._fade_threads[addr] = stop_event
+
+        def interpolator():
+            start = self.dmx.get_value(addr)
+            steps = max(1, int(duration / 0.05))
+            for i in range(steps):
+                if stop_event.is_set():
+                    return
+                val = int(start + (target - start) * (i + 1) / steps)
+                self.dmx.set_value(addr, val)
+                time.sleep(0.05)
+            self.dmx.set_value(addr, target)
+
+        threading.Thread(target=interpolator, daemon=True).start()
+
+
+class Dimr(Light):
+    def __init__(self, name, address, dmx, **kwargs):
+        super().__init__(name, address, dmx)
+        self.init_channels(kwargs)
+
+    def set_dim(self, value):
+        self.set_param("dim", value)
+
+
+class Par(Light):
+    def __init__(self, name, address, dmx, **kwargs):
+        super().__init__(name, address, dmx)
+        self.init_channels(kwargs)
+
+    def set_color(self, r=0, g=0, b=0, w=0, uv=0):
+        for param, val in zip(["r", "g", "b", "w", "uv"], [r, g, b, w, uv]):
+            self.set_param(param, val)
+
+    def set_dim(self, value):
+        self.set_param("dim", value)
+
+    def set_strobe(self, value):
+        self.set_param("strobo", value)
+
+
+class Head(Par):
+    def __init__(self, name, address, dmx, base_pan=127, base_tilt=127, **kwargs):
+        super().__init__(name, address, dmx, **kwargs)
+        self.base_pan = base_pan
+        self.base_tilt = base_tilt
+
+    def set_position(self, pan, tilt):
+        self.set_param("pan", pan)
+        self.set_param("tilt", tilt)
+
+    def set_movement_speed(self, value):
+        self.set_param("speed", value)
+
+    def set_zoom(self, value):
+        self.set_param("zoom", value)
+
+
+class Haze(Light):
+    def __init__(self, name, address, dmx, **kwargs):
+        super().__init__(name, address, dmx)
+        self.init_channels(kwargs)
+
+    def set_haze(self, value):
+        self.set_param("haze", value)
+
+    def set_fan(self, value):
+        self.set_param("fan", value)
+
+
+
+class LightPlot:
+    def __init__(self, filename, dmx):
+        self.filename = filename
+        self.lights = []
+        self.dmx = dmx
+        self.load_lights()
+
+    def load_lights(self):
+        if not os.path.exists(self.filename):
+            print("Soubor nenalezen, vytvářím nový se vzorovým světlem.")
+            return
+        with open(self.filename, "r", encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                self.lights.append(Light.from_dict(data, self.dmx))
+
+    def save_lights(self):
+        with open(self.filename, "w", encoding="utf-8") as file:
+            for light in self.lights:
+                file.write(json.dumps(light.to_dict(), ensure_ascii=False) + "\n")
+
+    def add_light(self, light):
+        self.lights.append(light)
+        self.save_lights()
+
+    def remove_light(self, index):
+        if 0 <= index < len(self.lights):
+            removed_light = self.lights.pop(index)
+            self.save_lights()
+            return removed_light
+        return None
+
+    def list_lights(self):
+        for light in self.lights:
+            print(light)
+
 
 class LightManager:
-    """
-    Tato třída je určená pro komunikaci se DMX převodníkem a třídou LightPlot které načítá světla ze souboru a upravuje je
-    -
-    __innit__ připojí ftdi zařízení, vytovří DMX buffer a spustí DMX smyčku, Zároveň inicializuje světla ze souboru
-    Metoda set_fixture pro nastavení konkrétních světel v nějakém rozsahu na danou hodnotu.
-    """
     def __init__(self, light_file="light_plot.txt", dmx_frequency=45):
-        # Získání seznamu připojených FTDI zařízení (DMX převodníků)
         devices = list(Ftdi.list_devices())
         if not devices:
-            raise RuntimeError("Žádné FTDI zařízení nenalezeno.")  # Pokud není žádné zařízení, ukončí se program
-        
-        # Výpis nalezených zařízení
-        print("Nalezená zařízení:")
-        for dev in devices:
-            print(dev)
-        
-        # Použití prvního nalezeného zařízení
+            raise RuntimeError("Žádné FTDI zařízení nenalezeno.")
         first_device = devices[0][0]
         vid, pid = first_device.vid, first_device.pid
-        
-        # Inicializace FTDI zařízení
-        self.ftdi = Ftdi()
-        try:
-            self.ftdi.open(vid, pid)
-        except OSError as e:
-            raise RuntimeError(f"Nepodařilo se otevřít FTDI zařízení: {e}")
-        
-        # Nastavení DMX komunikace
-        self.ftdi.set_baudrate(250000)  # Standardní baudrate pro DMX
-        self.ftdi.set_line_property(8, 2, 'N')  # 8 datových bitů, 2 stop bity, žádná parita
-        
-        # Inicializace DMX bufferu (512 kanálů)
-        self.dmx_data = [0] * 512
-        
-        # Načtení světel ze souboru
-        self.light_plot = LightPlot(light_file)
-        self.initialize_lights()  # Převod adres na indexy
 
-        # Spuštění DMX smyčky
+        self.ftdi = Ftdi()
+        self.ftdi.open(vid, pid)
+        self.ftdi.set_baudrate(250000)
+        self.ftdi.set_line_property(8, 2, 'N')
+
+        self.dmx = DMXController()
+        self.dmx.update = self._send_dmx_data
+        self.light_plot = LightPlot(light_file, self.dmx)
+
         self.running = True
         self.dmx_frequency = dmx_frequency
         self.dmx_thread = threading.Thread(target=self.dmx_loop, daemon=True)
         self.dmx_thread.start()
-        
-        # Prvotní blackout
-        self.blackout()
-        self.set_lights_white()
-        print("DMX smyčka spuštěna...")
-    
-    def initialize_lights(self):
-        """Inicializuje adresy světel tak, aby odpovídaly indexům v DMX bufferu."""
-        for light in self.light_plot.lights:
-            for attr, value in light.__dict__.items():
-                if isinstance(value, int) and value > 0:
-                    setattr(light, attr, value - 1)  # DMX adresy se indexují od 0
-                else:
-                    setattr(light, attr, None)  # Neplatné hodnoty jsou nastaveny na None
-    
+
+    def _send_dmx_data(self):
+        self.ftdi.set_break(True)
+        self.ftdi.set_break(False)
+        self.ftdi.write_data(bytes(self.dmx.buffer))
+
     def dmx_loop(self):
-        """Nekonečná smyčka pro odesílání DMX dat."""
         interval = 1 / self.dmx_frequency
         while self.running:
-            self.ftdi.set_break(True)  # DMX Start Code (Break)
-            self.ftdi.set_break(False)
-            self.ftdi.write_data(bytes(self.dmx_data))  # Odeslání DMX bufferu
-            time.sleep(interval)  # Počkání na další iteraci
-    
-    def set_fixture(self, light_type=None, param=None, value=0, value2=0, min_addr=0, max_addr=510, fade=100):
-        """
-        Nastavuje hodnoty DMX kanálů pro určitý typ světla.
-        - light_type: typ světla (např. "par")
-        - param: parametr světla (např. "dim", "r", "g", "b")
-        - value: hlavní hodnota parametru
-        - value2: druhá hodnota (pro 16bit nastavení)
-        - min_addr, max_addr: rozsah adres světel
-        - fade: doba přechodu na novou hodnotu
-        """
+            self.dmx.update()
+            time.sleep(interval)
 
-        for light in self.light_plot.lights:
-            # Ověření, zda odpovídá zadanému typu
-            if light_type and not isinstance(light, globals().get(light_type, object)):
-                continue
-            # Kontrola, zda je světlo v požadovaném rozsahu adres
-            if light.address is None or not (min_addr <= light.address <= max_addr):
-                continue
-            # Získání adresy parametru
-            param_address = getattr(light, param, None)
-            if param_address is not None:
-                if fade > 0:
-                    threading.Thread(target=self.fade_light, args=(param_address + light.address, value, fade), daemon=True).start()
-                  #  print(f"Nastavuji {param} na {value} pro světlo na adrese {light.address} s hodnotou fade {fade}")
-                else:
-                  #  print(f"Nastavuji {param} na {value} pro světlo na adrese {light.address}")
-                    self.dmx_data[param_address + light.address] = value  # Okamžitá změna hodnoty
-                if value2:
-                    self.dmx_data[param_address + light.address + 1] = value2  # Pokud je třeba nastavit i druhý DMX kanál
-
-    
-    def fade_light(self, address, target_value, fade_time):
-        """
-        Plynule mění hodnotu DMX kanálu na cílovou hodnotu v daném čase.
-        - address: adresa DMX kanálu
-        - target_value: konečná hodnota
-        - fade_time: doba změny (v ms)
-        """
-        steps = max(1, int((fade_time / 1000) * self.dmx_frequency))  # Počet kroků přechodu
-        start_value = self.dmx_data[address]
-        step_value = (target_value - start_value) / steps if start_value != target_value else 0
-        
-        for i in range(steps):
-            new_value = int(start_value + step_value * (i + 1))
-            self.dmx_data[address] = max(0, min(255, new_value))  # Ochrana proti přetečení
-            time.sleep(1 / self.dmx_frequency)  # Počkání mezi kroky přechodu
-    
     def cleanup(self):
-        """Zastaví DMX smyčku a zavře FTDI zařízení."""
-        print("Odpojuji DMX kontrolér...")
-        self.blackout()
-        time.sleep(0.2)
         self.running = False
-        self.dmx_thread.join()  # Počkání na ukončení DMX smyčky
-        self.ftdi.close()  # Zavření komunikace
-        
+        self.dmx_thread.join()
+        self.ftdi.close()
+
+
+class SimulatorManager:
+    def __init__(self, light_file="light_plot.txt", dmx_frequency=2):
+        self.dmx = DMXController()
+        self.dmx.update = self._simulate_dmx_output
+        self.light_plot = LightPlot(light_file, self.dmx)
+        self.running = True
+        self.dmx_frequency = dmx_frequency
+        self.dmx_thread = threading.Thread(target=self.dmx_loop, daemon=True)
+        self.dmx_thread.start()
+        print("Simulátor DMX spuštěn...")
+
+    def _simulate_dmx_output(self):
+        active_channels = [(i, val) for i, val in enumerate(self.dmx.buffer) if val > 0]
+        if active_channels:
+            print("Aktivní kanály:")
+            for addr, val in active_channels:
+                print(f"  Kanál {addr+1}: {val}")
+            print("-----")
+
+    def dmx_loop(self):
+        interval = 1 / self.dmx_frequency
+        while self.running:
+            self.dmx.update()
+            time.sleep(interval)
+
+    def cleanup(self):
+        print("Ukončuji DMX simulátor...")
+        self.running = False
+        self.dmx_thread.join()
+
+
+class SceneManager:
+    def __init__(self, light_plot):
+        self.light_plot = light_plot
+        self.ranges = {
+            "bass": (0, 41),
+            "midA": (41, 81),
+            "midB": (81, 121),
+            "midC": (121, 161),
+            "highA": (161, 196),
+            "highB": (196, 231)
+        }
+
+    def get_lights_in_range(self, start, end):
+        return [light for light in self.light_plot.lights if start <= light.address < end]
+
+    def get_group_lights(self, group_name):
+        if group_name in self.ranges:
+            start, end = self.ranges[group_name]
+            return self.get_lights_in_range(start, end)
+        return []
+
     def blackout(self):
-        self.set_fixture(light_type="par", param="dim", value=0, fade=100)
-        self.set_fixture(light_type="dimr", param="dim", value=0, fade=100)
-        self.set_fixture(light_type="head", param="dim", value=0, fade=100)
+        for light in self.light_plot.lights:
+            if hasattr(light, 'set_dim'):
+                light.set_dim(0)
 
-    def all_lights_half(self):
-        self.set_fixture(light_type="par", param="dim", value=127)
-        self.set_fixture(light_type="dimr", param="dim", value=127)
-        self.set_fixture(light_type="head", param="dim", value=127)
-    
-    def all_lights_full(self):
-        self.set_fixture(light_type="par", param="dim", value=255)
-        self.set_fixture(light_type="dimr", param="dim", value=255)
-        self.set_fixture(light_type="head", param="dim", value=255)
-    
-    def set_lights_red(self, min_addr=0, max_addr=510):
-        self.set_fixture(light_type="par", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
-    
-    def set_lights_green(self, min_addr=0, max_addr=510):
-        self.set_fixture(light_type="par", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
-        
-    def set_lights_blue(self, min_addr=0, max_addr=510):
-        self.set_fixture(light_type="par", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
-        
-    def set_lights_white(self, min_addr=0, max_addr=510):
-        self.set_fixture(light_type="par", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="par", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
-        self.set_fixture(light_type="head", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
-    
-    def reset_heads(self):
-        self.set_fixture(light_type="head", param="pan", value=127)
-        self.set_fixture(light_type="head", param="tilt", value=127)
-    
-    def beat_effect(self):
+    def set_color_for_group(self, group, color):
+        """
+        Nastaví barvu světel ve skupině. Podporuje RGB a volitelně W a UV.
+        Parametr `color` může být (r, g, b), (r, g, b, w) nebo (r, g, b, w, uv)
+        """
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_color'):
+                r, g, b = color[0], color[1], color[2]
+                w = color[3] if len(color) > 3 else 0
+                uv = color[4] if len(color) > 4 else 0
 
-        self.set_fixture(light_type="par", max_addr=100, param="dim", value=255, fade=0)
-        self.set_fixture(light_type="head", max_addr=100, param="dim", value=255, fade=0)
-        time.sleep(0.1)
-        self.set_fixture(light_type="par", max_addr=100, param="dim", value=80, fade=300)
-        self.set_fixture(light_type="head", max_addr=100, param="dim", value=80, fade=300)
+                supports_w = "w" in getattr(light, "channels", {})
+                supports_uv = "uv" in getattr(light, "channels", {})
 
+                light.set_color(
+                    r, g, b,
+                    w=w if supports_w else 0,
+                    uv=uv if supports_uv else 0
+                )
 
+    def set_dim_for_group(self, group, value):
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_dim'):
+                light.set_dim(value)
+
+    def pulse_on_beat(self, group, intensity=255):
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_dim'):
+                light.set_dim(intensity)
+        time.sleep(0.2)
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_dim'):
+                light.set_dim(0)
+
+    def set_zoom_for_group(self, group, value):
+        for light in self.get_group_lights(group):
+            if hasattr(light, 'set_zoom'):
+                light.set_zoom(value)
+
+    def set_movement_for_group(self, group, pan=None, tilt=None, speed=None):
+        """
+        Nastaví pozici a/nebo rychlost pohybu světel ve skupině.
+        Automaticky použije i 16bit verzi (panF, tiltF), pokud ji světlo má.
+        """
+        for light in self.get_group_lights(group):
+            # Nastavení pozice
+            if pan is not None or tilt is not None:
+                if hasattr(light, "channels"):
+                    if pan is not None and "pan" in light.channels:
+                        light.set_param("pan", pan)
+                        if "panF" in light.channels:
+                            light.set_param("panF", 0)  # nebo jemná hodnota dle potřeby
+                    if tilt is not None and "tilt" in light.channels:
+                        light.set_param("tilt", tilt)
+                        if "tiltF" in light.channels:
+                            light.set_param("tiltF", 0)  # nebo jemná hodnota dle potřeby
+
+            # Nastavení rychlosti
+            if speed is not None and hasattr(light, "set_movement_speed"):
+                light.set_movement_speed(speed)
+
+    def set_dim_all(self, value):
+        for group in self.ranges.keys():
+            self.set_dim_for_group(group, value)
 
 if __name__ == "__main__":
-    # Testovací sekvence nastavení světel
-    manager = LightManager()
-    manager.all_lights_half()
-    time.sleep(3)
-    manager.set_lights_red()
-    manager.set_fixture(light_type="par", param="dim", value=0, fade=6000) 
-    time.sleep(8)   
-    manager.cleanup()  # Ukončení programu
+    from pathlib import Path
+
+    # Ověříme, že soubor existuje nebo vytvoříme ukázkový
+    if not Path("light_plot.txt").exists():
+        with open("light_plot.txt", "w", encoding="utf-8") as f:
+            f.write('{"type": "par", "name": "Par 1", "address": 1, "r": 1, "g": 2, "b": 3, "dim": 4}\n')
+            f.write('{"type": "par", "name": "Par 2", "address": 51, "r": 1, "g": 2, "b": 3, "dim": 4}\n')
+            f.write('{"type": "head", "name": "Head 1", "address": 101, "r": 1, "g": 2, "b": 3, "dim": 4, "pan": 5, "tilt": 6, "speed": 7, "zoom": 8, "base_pan": 127, "base_tilt": 127}\n')
+
+    manager = None
+    try:
+        manager = SimulatorManager("light_plot.txt", dmx_frequency=10)
+        scenes = SceneManager(manager.light_plot)
+
+        print("Zapínám všechna světla...")
+        scenes.set_dim_all(255)
+
+        print("Nastavuji barvy...")
+        scenes.set_color_for_group("bass", (255, 0, 0))   # červená
+        scenes.set_color_for_group("midA", (0, 0, 255))   # modrá
+        scenes.set_color_for_group("highB", (0, 255, 0))  # zelená
+        time.sleep(3)
+
+        print("Pulz na beat pro BASS...")
+        scenes.pulse_on_beat("bass", intensity=255)
+        time.sleep(1)
+
+        print("Pohyb hlav...")
+        scenes.set_movement_for_group("highB", pan=127, tilt=127, speed=10)
+        time.sleep(1)
+
+        print("Zoom a speed...")
+        scenes.set_zoom_for_group("highB", 200)
+        time.sleep(2)
+
+        print("Blackout všech světel...")
+        scenes.blackout()
+
+        input("\n \n \n \n Stiskněte Enter pro ukončení...\n \n \n \n \n \n")
+
+    finally:
+        if manager:
+            manager.cleanup()
+
+

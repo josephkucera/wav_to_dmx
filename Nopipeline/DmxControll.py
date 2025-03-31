@@ -10,7 +10,7 @@ class LightManager:
     __innit__ připojí ftdi zařízení, vytovří DMX buffer a spustí DMX smyčku, Zároveň inicializuje světla ze souboru
     Metoda set_fixture pro nastavení konkrétních světel v nějakém rozsahu na danou hodnotu.
     """
-    def __init__(self, light_file="light_plot.txt", dmx_frequency=40):
+    def __init__(self, light_file="light_plot.txt", dmx_frequency=45):
         # Získání seznamu připojených FTDI zařízení (DMX převodníků)
         devices = list(Ftdi.list_devices())
         if not devices:
@@ -48,6 +48,11 @@ class LightManager:
         self.dmx_frequency = dmx_frequency
         self.dmx_thread = threading.Thread(target=self.dmx_loop, daemon=True)
         self.dmx_thread.start()
+        
+        # Prvotní blackout
+        self.blackout()
+        self.set_lights_white()
+        print("DMX smyčka spuštěna...")
     
     def initialize_lights(self):
         """Inicializuje adresy světel tak, aby odpovídaly indexům v DMX bufferu."""
@@ -67,7 +72,7 @@ class LightManager:
             self.ftdi.write_data(bytes(self.dmx_data))  # Odeslání DMX bufferu
             time.sleep(interval)  # Počkání na další iteraci
     
-    def set_fixture(self, light_type=None, param=None, value=0, value2=0, min_addr=0, max_addr=510, fade=1000):
+    def set_fixture(self, light_type=None, param=None, value=0, value2=0, min_addr=0, max_addr=510, fade=100):
         """
         Nastavuje hodnoty DMX kanálů pro určitý typ světla.
         - light_type: typ světla (např. "par")
@@ -77,6 +82,7 @@ class LightManager:
         - min_addr, max_addr: rozsah adres světel
         - fade: doba přechodu na novou hodnotu
         """
+
         for light in self.light_plot.lights:
             # Ověření, zda odpovídá zadanému typu
             if light_type and not isinstance(light, globals().get(light_type, object)):
@@ -89,12 +95,13 @@ class LightManager:
             if param_address is not None:
                 if fade > 0:
                     threading.Thread(target=self.fade_light, args=(param_address + light.address, value, fade), daemon=True).start()
-                    print(f"Nastavuji {param} na {value} pro světlo na adrese {light.address} s hodnotou fade {fade}")
+                  #  print(f"Nastavuji {param} na {value} pro světlo na adrese {light.address} s hodnotou fade {fade}")
                 else:
-                    print(f"Nastavuji {param} na {value} pro světlo na adrese {light.address}")
+                  #  print(f"Nastavuji {param} na {value} pro světlo na adrese {light.address}")
                     self.dmx_data[param_address + light.address] = value  # Okamžitá změna hodnoty
                 if value2:
                     self.dmx_data[param_address + light.address + 1] = value2  # Pokud je třeba nastavit i druhý DMX kanál
+
     
     def fade_light(self, address, target_value, fade_time):
         """
@@ -112,30 +119,82 @@ class LightManager:
             self.dmx_data[address] = max(0, min(255, new_value))  # Ochrana proti přetečení
             time.sleep(1 / self.dmx_frequency)  # Počkání mezi kroky přechodu
     
-    def close(self):
+    def cleanup(self):
         """Zastaví DMX smyčku a zavře FTDI zařízení."""
         print("Odpojuji DMX kontrolér...")
+        self.blackout()
+        time.sleep(0.2)
         self.running = False
         self.dmx_thread.join()  # Počkání na ukončení DMX smyčky
         self.ftdi.close()  # Zavření komunikace
+        
+    def blackout(self):
+        self.set_fixture(light_type="par", param="dim", value=0, fade=100)
+        self.set_fixture(light_type="dimr", param="dim", value=0, fade=100)
+        self.set_fixture(light_type="head", param="dim", value=0, fade=100)
+
+    def all_lights_half(self):
+        self.set_fixture(light_type="par", param="dim", value=127)
+        self.set_fixture(light_type="dimr", param="dim", value=127)
+        self.set_fixture(light_type="head", param="dim", value=127)
+    
+    def all_lights_full(self):
+        self.set_fixture(light_type="par", param="dim", value=255)
+        self.set_fixture(light_type="dimr", param="dim", value=255)
+        self.set_fixture(light_type="head", param="dim", value=255)
+    
+    def set_lights_red(self, min_addr=0, max_addr=510):
+        self.set_fixture(light_type="par", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
+    
+    def set_lights_green(self, min_addr=0, max_addr=510):
+        self.set_fixture(light_type="par", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="b", value=0, min_addr=min_addr, max_addr=max_addr)
+        
+    def set_lights_blue(self, min_addr=0, max_addr=510):
+        self.set_fixture(light_type="par", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="r", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="g", value=0, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
+        
+    def set_lights_white(self, min_addr=0, max_addr=510):
+        self.set_fixture(light_type="par", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="r", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="g", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="par", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
+        self.set_fixture(light_type="head", param="b", value=255, min_addr=min_addr, max_addr=max_addr)
+    
+    def reset_heads(self):
+        self.set_fixture(light_type="head", param="pan", value=127)
+        self.set_fixture(light_type="head", param="tilt", value=127)
+    
+    def beat_effect(self):
+
+        self.set_fixture(light_type="par", max_addr=100, param="dim", value=255, fade=0)
+        self.set_fixture(light_type="head", max_addr=100, param="dim", value=255, fade=0)
+        time.sleep(0.1)
+        self.set_fixture(light_type="par", max_addr=100, param="dim", value=80, fade=300)
+        self.set_fixture(light_type="head", max_addr=100, param="dim", value=80, fade=300)
+
+
 
 if __name__ == "__main__":
     # Testovací sekvence nastavení světel
     manager = LightManager()
+    manager.all_lights_half()
     time.sleep(3)
-    manager.set_fixture(light_type="par", param="dim", value=128, fade=0)
-    manager.set_fixture(light_type="par", param="r", value=255, fade=2000)
-    time.sleep(4)
-    manager.set_fixture(light_type="par", param="g", value=255, fade=2000)
-    manager.set_fixture(light_type="par", param="b", value=128, fade=500)
-    manager.set_fixture(light_type="par", param="r", value=0, fade=3000)
-    
-    time.sleep(5)
-    manager.set_fixture(light_type="par", param="dim", value=255, fade=2000)    
-    manager.set_fixture(light_type="par", param="g", value=0, fade=2000)
-    time.sleep(2)
-    manager.set_fixture(light_type="par", param="b", value=255, fade=3000)
-    time.sleep(3)
+    manager.set_lights_red()
     manager.set_fixture(light_type="par", param="dim", value=0, fade=6000) 
     time.sleep(8)   
-    manager.close()  # Ukončení programu
+    manager.cleanup()  # Ukončení programu
