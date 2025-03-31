@@ -203,6 +203,7 @@ class LightManager:
         self.dmx_frequency = dmx_frequency
         self.dmx_thread = threading.Thread(target=self.dmx_loop, daemon=True)
         self.dmx_thread.start()
+        print("DMX Připojeno...")
 
     def _send_dmx_data(self):
         self.ftdi.set_break(True)
