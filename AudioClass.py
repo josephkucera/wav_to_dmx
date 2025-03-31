@@ -10,6 +10,7 @@ import pyaudio
 import sys
 import datetime
 
+
 class AudioSource:
     def read_buffer(self):
         raise NotImplementedError("Method read_buffer() must be implemented.")
@@ -49,7 +50,6 @@ class FileSource(AudioSource):
         self.hop = hop or self.buffer_size
         self.pointer = 0
         self.sleep_time = self.buffer_size / self.rate
-        print("Soubor načten")
 
     def read_buffer(self):
         if self.pointer + self.buffer_size >= len(self.signal):
@@ -70,6 +70,7 @@ class AudioState:
     freqs: tuple = (0, 0, 0)
     chord: str = ""
 
+
 class AudioPipeline:
     def __init__(self, source, rate=44100):
         self.source = source
@@ -88,11 +89,9 @@ class AudioPipeline:
         self.stop_event = threading.Event()
         self.lock = threading.Lock()
 
-        self.max_recent_signal_length = self.rate * 4  # sliding window: 4 seconds
+        self.max_recent_signal_length = self.rate * 4
+        self.bpm_ready_event = threading.Event()
 
-        self.bpm_ready_event = threading.Event()  # nový event pro synchronizaci
-
-        # NMF setup
         self.nmf_analyzer = DecomposeNMF(sr=self.rate, n_components=5, n_fft=4096)
 
     def filter(self, signal, filter_type='HP', f1=200, f2=None, Q=4):
@@ -134,11 +133,9 @@ class AudioPipeline:
                 bpm /= 2
             with self.lock:
                 self.state.bpm = round(bpm)
-            print(f"[BPM UPDATE] bpm={self.state.bpm}")
-            self.bpm_ready_event.set()  # signalizuj, že máme BPM
+            self.bpm_ready_event.set()
 
     def input_loop(self):
-        # Přednahrání do sliding window pro rychlejší BPM
         while len(self.recent_signal) < self.rate * 4 and not self.stop_event.is_set():
             buffer = self.source.read_buffer()
             if buffer is None:
@@ -146,33 +143,27 @@ class AudioPipeline:
             self.recent_signal = np.concatenate((self.recent_signal, buffer))
             time.sleep(self.buffer_size / self.rate)
 
-        # Spuštění plného zpracování
         while not self.stop_event.is_set():
             buffer = self.source.read_buffer()
             if buffer is None:
                 break
             try:
                 self.buffer_queue.put(buffer, timeout=0.5)
-
                 self.recent_signal = np.concatenate((self.recent_signal, buffer))
                 if len(self.recent_signal) > self.max_recent_signal_length:
                     self.recent_signal = self.recent_signal[-self.max_recent_signal_length:]
-
             except queue.Full:
                 continue
             time.sleep(self.buffer_size / self.rate)
 
     def beat_analysis_loop(self):
-        print("[WAIT] beat_analysis_loop čeká na první BPM...")
         self.bpm_ready_event.wait()
-        self.last_beat_time = time.time()  # zarovnat start metronomu
-        print("[START] beat_analysis_loop spuštěn.")
+        self.last_beat_time = time.time()
 
         while not self.stop_event.is_set():
             now = time.time()
             with self.lock:
                 bpm = self.state.bpm
-                self.state.beat_on_off = False
 
             beat_interval = 60.0 / bpm if bpm > 0 else None
             if beat_interval is None:
@@ -180,10 +171,9 @@ class AudioPipeline:
                 continue
 
             next_beat_time = self.last_beat_time + beat_interval
-            sleep_time = max(0, next_beat_time - now)
-            time.sleep(sleep_time)
-
+            time.sleep(max(0, next_beat_time - now))
             now = time.time()
+
             buffer = None
             try:
                 buffer = self.buffer_queue.get_nowait()
@@ -191,7 +181,8 @@ class AudioPipeline:
             except queue.Empty:
                 pass
 
-            if buffer is not None and abs(now - next_beat_time) <= 0.2 and self.beat_adjustment(buffer):
+            beat_detected = buffer is not None and abs(now - next_beat_time) <= 0.2 and self.beat_adjustment(buffer)
+            if beat_detected:
                 self.last_beat_time = now
             else:
                 self.last_beat_time = next_beat_time
@@ -200,8 +191,9 @@ class AudioPipeline:
                 self.state.beat_on_off = True
                 self.beat_count += 1
 
-            now_str = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-            print(f"[BEAT] {now_str} - {self.state}")
+            time.sleep(0.05)
+            with self.lock:
+                self.state.beat_on_off = False
 
     def frequency_analysis_loop(self):
         while not self.stop_event.is_set():
@@ -216,7 +208,7 @@ class AudioPipeline:
 
     def bpm_analysis_loop(self):
         while not self.stop_event.is_set():
-            time.sleep(2.0)  # zkrácený první interval pro rychlejší start
+            time.sleep(2.0)
             self.calculate_bpm()
 
     def start(self):
@@ -234,10 +226,8 @@ class AudioPipeline:
         for t in self.threads:
             t.join()
 
-if __name__ == "__main__":
-    from pathlib import Path
-    import pyaudio
 
+if __name__ == "__main__":
     try:
         source = FileSource("Test/sound/davids_ant.wav")
         pipeline = AudioPipeline(source)
@@ -248,26 +238,16 @@ if __name__ == "__main__":
 
         while True:
             time.sleep(0.1)
-
             with pipeline.lock:
                 state = pipeline.state
-
                 if state.beat_on_off:
-                    now_str = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                    print(f"[DEBUG] {now_str} - BEAT ON - BPM: {state.bpm}, dB: {state.db:.1f}, Chord: {state.chord}")
-
+                    last_beat_time = time.time()
+                    if state.chord != last_chord:
+                        last_chord = state.chord
+                elif time.time() - last_beat_time > 2:
                     last_beat_time = time.time()
 
-                    if state.chord != last_chord:
-                        print(f"→ Chord changed to: {state.chord}")
-                        last_chord = state.chord
-
-                elif time.time() - last_beat_time > 2:
-                    print("... no beat detected in the last 2 seconds ...")
-                    last_beat_time = time.time()  # prevent repeated printing
-
     except KeyboardInterrupt:
-        print("\nZastavuji...")
         pipeline.stop()
         if hasattr(source, "cleanup"):
             source.cleanup()

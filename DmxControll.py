@@ -257,8 +257,8 @@ class SceneManager:
     def __init__(self, light_plot):
         self.light_plot = light_plot
         self.ranges = {
-            "bass": (0, 41),
-            "midA": (41, 81),
+            "bass": (0, 61),
+            "midA": (61, 81),
             "midB": (81, 121),
             "midC": (121, 161),
             "highA": (161, 196),
@@ -304,14 +304,18 @@ class SceneManager:
             if hasattr(light, 'set_dim'):
                 light.set_dim(value)
 
-    def pulse_on_beat(self, group, intensity=255):
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_dim'):
-                light.set_dim(intensity)
-        time.sleep(0.2)
-        for light in self.get_group_lights(group):
-            if hasattr(light, 'set_dim'):
-                light.set_dim(0)
+    def pulse_on_beat(self, group, intensity=255, duration=0.2):
+        def pulse_thread():
+            time.sleep(0.03)  # 🟢 malá pauza před nastavením
+            for light in self.get_group_lights(group):
+                if hasattr(light, 'set_dim'):
+                    light.set_dim(intensity)
+            time.sleep(duration)
+            for light in self.get_group_lights(group):
+                if hasattr(light, 'set_dim'):
+                    light.set_dim(128)
+
+        threading.Thread(target=pulse_thread, daemon=True).start()
 
     def set_zoom_for_group(self, group, value):
         for light in self.get_group_lights(group):
@@ -344,49 +348,20 @@ class SceneManager:
         for group in self.ranges.keys():
             self.set_dim_for_group(group, value)
 
+
 if __name__ == "__main__":
-    from pathlib import Path
+    manager = LightManager("light_plot.txt", dmx_frequency=30)
+    scenes = SceneManager(manager.light_plot)
 
-    # Ověříme, že soubor existuje nebo vytvoříme ukázkový
-    if not Path("light_plot.txt").exists():
-        with open("light_plot.txt", "w", encoding="utf-8") as f:
-            f.write('{"type": "par", "name": "Par 1", "address": 1, "r": 1, "g": 2, "b": 3, "dim": 4}\n')
-            f.write('{"type": "par", "name": "Par 2", "address": 51, "r": 1, "g": 2, "b": 3, "dim": 4}\n')
-            f.write('{"type": "head", "name": "Head 1", "address": 101, "r": 1, "g": 2, "b": 3, "dim": 4, "pan": 5, "tilt": 6, "speed": 7, "zoom": 8, "base_pan": 127, "base_tilt": 127}\n')
+    print("Zkouška: Bílá barva + plný dimmer")
+    scenes.set_color_for_group("bass", (255, 255, 255))
+    scenes.set_dim_for_group("bass", 255)
 
-    manager = None
-    try:
-        manager = SimulatorManager("light_plot.txt", dmx_frequency=10)
-        scenes = SceneManager(manager.light_plot)
+    time.sleep(3)
 
-        print("Zapínám všechna světla...")
-        scenes.set_dim_all(255)
+    print("Snížení dimmeru na 0...")
+    scenes.set_dim_for_group("bass", 0)
 
-        print("Nastavuji barvy...")
-        scenes.set_color_for_group("bass", (255, 0, 0))   # červená
-        scenes.set_color_for_group("midA", (0, 0, 255))   # modrá
-        scenes.set_color_for_group("highB", (0, 255, 0))  # zelená
-        time.sleep(3)
-
-        print("Pulz na beat pro BASS...")
-        scenes.pulse_on_beat("bass", intensity=255)
-        time.sleep(1)
-
-        print("Pohyb hlav...")
-        scenes.set_movement_for_group("highB", pan=127, tilt=127, speed=10)
-        time.sleep(1)
-
-        print("Zoom a speed...")
-        scenes.set_zoom_for_group("highB", 200)
-        time.sleep(2)
-
-        print("Blackout všech světel...")
-        scenes.blackout()
-
-        input("\n \n \n \n Stiskněte Enter pro ukončení...\n \n \n \n \n \n")
-
-    finally:
-        if manager:
-            manager.cleanup()
-
-
+    time.sleep(2)
+    print("Test ukončen")
+    manager.cleanup()

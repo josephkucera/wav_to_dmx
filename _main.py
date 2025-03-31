@@ -1,8 +1,7 @@
 import time
 from AudioClass import AudioPipeline, FileSource
-from DmxControll import SimulatorManager, SceneManager, LightManager
+from DmxControll import SceneManager, LightManager
 from VectorClass import VectorClass
-
 
 if __name__ == "__main__":
     dmx_frequency = 42  # Hz
@@ -13,27 +12,14 @@ if __name__ == "__main__":
     audio = AudioPipeline(source)
     manager = LightManager("light_plot.txt", dmx_frequency=dmx_frequency)
     scene = SceneManager(manager.light_plot)
-    vector = VectorClass(scene_manager=scene)  # Předání správného objektu
+    vector = VectorClass(scene_manager=scene)
 
     try:
         audio.start()
-
-        last_chord = None
         while True:
             time.sleep(sleep_time)
-
             with audio.lock:
                 state = audio.state
-
-            # Debug výstup
-            if state.beat_on_off:
-                now = time.strftime("%H:%M:%S")
-                print(f"[DEBUG] {now} - BEAT ON - BPM: {state.bpm}, dB: {state.db:.1f}, Chord: {state.chord}")
-                if state.chord != last_chord:
-                    print(f"  → Chord changed to: {state.chord}")
-                    last_chord = state.chord
-
-            # Převod stavu na DMX příkazy
             vector.process_audio_state(state)
 
     except KeyboardInterrupt:
