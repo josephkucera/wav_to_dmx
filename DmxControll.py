@@ -257,12 +257,13 @@ class SceneManager:
     def __init__(self, light_plot):
         self.light_plot = light_plot
         self.ranges = {
-            "bass": (0, 61),
+            "bass": (2, 61),
             "midA": (61, 81),
             "midB": (81, 121),
             "midC": (121, 161),
             "highA": (161, 196),
-            "highB": (196, 231)
+            "highB": (196, 231),
+            "special":(0,1)
         }
 
     def get_lights_in_range(self, start, end):
@@ -306,7 +307,7 @@ class SceneManager:
 
     def pulse_on_beat(self, group, intensity=255, duration=0.2):
         def pulse_thread():
-            time.sleep(0.03)  # 🟢 malá pauza před nastavením
+            time.sleep(0.03)  # malá pauza před nastavením
             for light in self.get_group_lights(group):
                 if hasattr(light, 'set_dim'):
                     light.set_dim(intensity)

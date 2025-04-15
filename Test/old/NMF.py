@@ -11,10 +11,8 @@ from pathlib import Path
 from collections import Counter
 import re
 
-# Třída pro vizualizaci výsledků NMF dekompozice
 class NMFPlotter:
     def __init__(self, stft, activations, bases, sr, n_fft, highlighted_ranges):
-        # Inicializace s parametry pro grafy
         self.stft = stft
         self.activations = activations
         self.bases = bases
@@ -23,43 +21,39 @@ class NMFPlotter:
         self.highlighted_ranges = highlighted_ranges
 
     def plot(self):
-        # Výpočet frekvencí pro X osu grafu
-        freqs = librosa.fft_frequencies(sr=self.sr, n_fft=self.n_fft)
-        plt.figure(figsize=(12, 10))
+        plt.figure(figsize=(12, 12))  # vyšší graf pro čitelnost
 
-        # Graf spektrogramu
-        plt.subplot(4, 1, 1)
+        # 1. Spektrogram
+        plt.subplot(3, 1, 1)
         librosa.display.specshow(librosa.amplitude_to_db(np.abs(self.stft)), sr=self.sr, x_axis='time', y_axis='log')
-        plt.title('Spectrogram')
+        plt.title('Spektrogram')
+        plt.xlabel('Čas [s]')
+        plt.ylabel('Frekvence [Hz]')
+        plt.colorbar(format='%+2.0f dB', label='Intenzita [dB]')
 
-        # Graf aktivací NMF komponent
-        plt.subplot(4, 1, 2)
-        for act in self.activations:
-            plt.plot(act)
-        plt.title('NMF Activations')
-
-        # Graf základních komponent NMF
-        plt.subplot(4, 1, 3)
-        for i, basis in enumerate(self.bases):
-            plt.plot(basis, label=f'Component {i}')
-        plt.title('NMF Bases')
+        # 2. Aktivace komponent NMF
+        plt.subplot(3, 1, 2)
+        for i, act in enumerate(self.activations):
+            plt.plot(act, label=f'Složka {i+1}')
+        plt.title('Aktivace NMF komponent')
+        plt.xlabel('STFT Okna')
+        plt.ylabel('Aktivace')
         plt.legend()
 
-        # Graf FFT základních komponent
-        plt.subplot(4, 1, 4)
+        # 3. Základní komponenty NMF
+        plt.subplot(3, 1, 3)
         for i, basis in enumerate(self.bases):
-            plt.stem(freqs, basis, linefmt=f'C{i}-', markerfmt=f'C{i}o', basefmt=" ", label=f'Component {i}')
-            if i < len(self.highlighted_ranges):
-                low, high = self.highlighted_ranges[i]
-                plt.axvspan(low, high, color=f'C{i}', alpha=0.2)
-        plt.xscale('log')
-        plt.xlabel('Frequency (Hz)')
-        plt.ylabel('Magnitude')
-        plt.title('FFT of Filtered NMF Bases')
-        plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+            plt.plot(basis, label=f'Složka {i+1}')
+        plt.title('Základní frekvenční komponenty (Báze)')
+        plt.xlabel('Frekvenční bin')
+        plt.ylabel('Magnituda')
         plt.legend()
+
         plt.tight_layout()
         plt.show()
+
+
+
 
 # Třída pro exportování NMF dekompozice do souborů
 class NMFExporter:
@@ -297,8 +291,8 @@ class DecomposeNMF:
 
 # Hlavní funkce pro spuštění dekompozice a její vizualizace
 def main():
-    audio_path = "Test/sound/mixdown.wav"
-    model = DecomposeNMF(audio_path, n_components=5, n_fft=4096)
+    audio_path = "Test/sound/david_5_2.wav"
+    model = DecomposeNMF(audio_path, n_components=4, n_fft=4096, duration_seconds=4)
     model.apply_filters()
     model.export_json()
     model.resynthesize(normalize=True)

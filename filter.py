@@ -11,7 +11,7 @@ def create_filter(signal, filter_type='HP', fs=44100, f1=200, f2=None, Q=4):
     - fs: vzorkovací frekvence (Hz)
     - f1: dolní mezní frekvence (nebo hlavní u HP/LP)
     - f2: horní mezní frekvence (pouze pro BP)
-    - Q: řád filtru (standardně 4, pokles = Q*6 dB/okt)
+    - Q: řád filtru (standardně 4, pokles = Q*6 dB/dek)
 
     Vrací:
     - filtrovaný signál

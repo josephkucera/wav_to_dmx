@@ -19,7 +19,7 @@ class AudioSource:
 class MicrophoneSource(AudioSource):
     def __init__(self, rate=44100, frames_per_buffer=None, format_=pyaudio.paInt16, channels=1):
         self.RATE = rate
-        self.FRAMES_PER_BUFFER = frames_per_buffer or rate // 10
+        self.FRAMES_PER_BUFFER = frames_per_buffer or rate // 5
         self.FORMAT = format_
         self.CHANNELS = channels
 
