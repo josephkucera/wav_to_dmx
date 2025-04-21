@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 class VectorClass:
-    def __init__(self, scene_manager, mode="newton", config_dir="VectorConfig"):
+    def __init__(self, scene_manager, mode="korsakov", config_dir="VectorConfig"):
         self.scene = scene_manager
         self.mode = mode
         self.config_dir = config_dir
@@ -36,10 +36,17 @@ class VectorClass:
         self.scene.set_dim_all(128)
 
     def process_audio_state(self, state):
+        self.switch_state = False
         # Reakce na beat pouze při hodnotě True
         if state.beat_on_off:
             self.scene.pulse_on_beat("bass", intensity=255, duration=0.2)
             self.scene.set_dim_for_group("bass", 128)
+        
+        # Efekt: střídání ledek
+            self.switch_state = not self.switch_state
+            self.scene.alternating_light_strip("strip", state=self.switch_state, intensity=200)
+        
+    
 
         # Nastavení barev podle frekvencí (pouze při změně)
         freqs = tuple(state.freqs)

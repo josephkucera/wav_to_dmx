@@ -42,23 +42,73 @@ class MicrophoneSource(AudioSource):
         self.p.terminate()
 
 
+import threading
+import queue
+import time
+import numpy as np
+import librosa
+import pyaudio
+
+
 class FileSource(AudioSource):
     def __init__(self, filepath, rate=44100, buffer_size=None, hop=None):
         self.signal, _ = librosa.load(filepath, sr=rate, mono=True)
         self.rate = rate
-        self.buffer_size = buffer_size or rate // 5
+        self.buffer_size = buffer_size or rate // 10
         self.hop = hop or self.buffer_size
         self.pointer = 0
-        self.sleep_time = self.buffer_size / self.rate
+
+        self.audio_queue = queue.Queue(maxsize=100)
+        self.analysis_queue = queue.Queue(maxsize=100)
+
+        self.p = pyaudio.PyAudio()
+        self.output_stream = self.p.open(
+            format=pyaudio.paInt16,
+            channels=1,
+            rate=self.rate,
+            output=True,
+            frames_per_buffer=self.buffer_size
+        )
+
+        self.stop_event = threading.Event()
+        self.playback_thread = threading.Thread(target=self.playback_loop, daemon=True)
+        self.playback_thread.start()
+
+    def playback_loop(self):
+        while not self.stop_event.is_set():
+            if self.pointer + self.buffer_size >= len(self.signal):
+                self.stop_event.set()
+                break
+
+            # Vyříznout frame, posunout ukazatel
+            frame = self.signal[self.pointer:self.pointer + self.buffer_size]
+            self.pointer += self.hop
+            frame_int16 = np.int16(frame * 32767)
+            data_bytes = frame_int16.tobytes()
+
+            # Přehrát
+            self.output_stream.write(data_bytes)
+
+            # Poslat do fronty pro analýzu
+            try:
+                self.analysis_queue.put(frame_int16, timeout=0.1)
+            except queue.Full:
+                pass  # Analýza nestíhá – přeskoč
 
     def read_buffer(self):
-        if self.pointer + self.buffer_size >= len(self.signal):
-            return None
-        frame = self.signal[self.pointer:self.pointer + self.buffer_size]
-        self.pointer += self.hop
-        frame = np.int16(frame * 32767)
-        time.sleep(self.sleep_time)
-        return frame
+        try:
+            return self.analysis_queue.get(timeout=0.1)
+        except queue.Empty:
+            return None  # Není k dispozici – asi konec
+
+    def cleanup(self):
+        self.stop_event.set()
+        self.playback_thread.join()
+        self.output_stream.stop_stream()
+        self.output_stream.close()
+        self.p.terminate()
+
+
 
 
 @dataclass
@@ -191,7 +241,7 @@ class AudioPipeline:
                 self.state.beat_on_off = True
                 self.beat_count += 1
 
-            time.sleep(0.05)
+            time.sleep(0.15)
             with self.lock:
                 self.state.beat_on_off = False
 

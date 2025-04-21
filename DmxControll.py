@@ -258,13 +258,14 @@ class SceneManager:
     def __init__(self, light_plot):
         self.light_plot = light_plot
         self.ranges = {
-            "bass": (2, 61),
-            "midA": (61, 81),
-            "midB": (81, 121),
+            "bass": (2, 20),
+            "midA": (31, 33),
+            "midB": (40, 121),
             "midC": (121, 161),
             "highA": (161, 196),
             "highB": (196, 231),
-            "special":(0,1)
+            "special":(0,1),
+            "strip":(0,2)
         }
 
     def get_lights_in_range(self, start, end):
@@ -350,6 +351,16 @@ class SceneManager:
     def set_dim_all(self, value):
         for group in self.ranges.keys():
             self.set_dim_for_group(group, value)
+            
+    def alternating_light_strip(self, group, state=True, intensity=255):
+        lights = self.get_group_lights(group)
+        for i, light in enumerate(lights):
+            if hasattr(light, 'set_dim'):
+                if (i % 2 == 0 and state) or (i % 2 == 1 and not state):
+                    light.set_dim(intensity)
+                else:
+                    light.set_dim(0)
+
 
 
 
@@ -365,6 +376,7 @@ if __name__ == "__main__":
     scenes.blackout()             # vypne všechna světla
     scenes.pulse_on_beat('bass')  # pulz pro skupinu bass
     scenes.set_color_for_group("bass", (255, 255, 255)) # nastaví bílou na bass
+    manager.dmx.set_value(kanál,hodnota) #nastavení konkrétního kanálu
     Vypnutí je pomocí Ctrl + D 
         """)
 
