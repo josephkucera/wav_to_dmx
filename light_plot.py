@@ -10,12 +10,12 @@ class Light:
         return json.dumps(self.__dict__, ensure_ascii=False)
 
 class Dimr(Light):
-    def __init__(self, name, address, dim):
+    def __init__(self, name, address, dim=0, **kwargs):
         super().__init__(name, address)
         self.dim = dim
 
 class Par(Light):
-    def __init__(self, name, address, r, g, b, w, uv, dim, fade, strobo):
+    def __init__(self, name, address, r=0, g=0, b=0, w=0, uv=0, dim=0, fade=0, strobo=0, **kwargs):
         super().__init__(name, address)
         self.r = r
         self.g = g
@@ -27,8 +27,10 @@ class Par(Light):
         self.strobo = strobo
 
 class Head(Light):
-    def __init__(self, name, address, r, g, b, w, uv, dim, fade, strobo,
-                 pan, panF, tilt, tiltF, speed, zoom, base_pan=127, base_tilt=127):
+    def __init__(self, name, address,
+                 r=0, g=0, b=0, w=0, uv=0, dim=0, fade=0, strobo=0,
+                 pan=0, panF=0, tilt=0, tiltF=0, speed=0, zoom=0,
+                 base_pan=127, base_tilt=127, **kwargs):
         super().__init__(name, address)
         self.r = r
         self.g = g
@@ -48,7 +50,7 @@ class Head(Light):
         self.base_tilt = base_tilt
 
 class Haze(Light):
-    def __init__(self, name, address, haze, fan):
+    def __init__(self, name, address, haze=0, fan=0, **kwargs):
         super().__init__(name, address)
         self.haze = haze
         self.fan = fan
@@ -63,13 +65,13 @@ class LightPlot:
         self.lights.clear()
         if not os.path.exists(self.filename):
             print("Soubor nenalezen, vytvářím nový se vzorovým světlem.")
-            self.lights.append(Head("Univerzal", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 127))
+            self.lights.append(Head("Univerzal", 0))
             self.save_lights()
         else:
             with open(self.filename, "r", encoding="utf-8") as file:
                 for line in file:
                     data = json.loads(line.strip())
-                    light_type = data.pop("type")
+                    light_type = data.pop("type", "head")
                     if light_type == "dimr":
                         self.lights.append(Dimr(**data))
                     elif light_type == "par":
