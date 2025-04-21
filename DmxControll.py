@@ -3,6 +3,7 @@ import json
 import time
 import threading
 from pyftdi.ftdi import Ftdi
+from IPython import embed
 
 
 class DMXController:
@@ -279,6 +280,7 @@ class SceneManager:
         for light in self.light_plot.lights:
             if hasattr(light, 'set_dim'):
                 light.set_dim(0)
+        print("provadim zhasnuti svetel")
 
     def set_color_for_group(self, group, color):
         """
@@ -350,19 +352,38 @@ class SceneManager:
             self.set_dim_for_group(group, value)
 
 
+
 if __name__ == "__main__":
     manager = LightManager("light_plot.txt", dmx_frequency=30)
     scenes = SceneManager(manager.light_plot)
 
-    print("Zkouška: Bílá barva + plný dimmer")
-    scenes.set_color_for_group("bass", (255, 255, 255))
-    scenes.set_dim_for_group("bass", 255)
+    print("Spouštím IPython interaktivní shell...")
+    embed(header="""
+    Vítej v interaktivním shellu!
+    Příklady:
+    scenes.set_dim_all(255)       # zapne všechna světla
+    scenes.blackout()             # vypne všechna světla
+    scenes.pulse_on_beat('bass')  # pulz pro skupinu bass
+    scenes.set_color_for_group("bass", (255, 255, 255)) # nastaví bílou na bass
+    Vypnutí je pomocí Ctrl + D 
+        """)
 
-    time.sleep(3)
 
-    print("Snížení dimmeru na 0...")
-    scenes.set_dim_for_group("bass", 0)
-
-    time.sleep(2)
-    print("Test ukončen")
     manager.cleanup()
+
+# if __name__ == "__main__":
+#     manager = LightManager("light_plot.txt", dmx_frequency=30)
+#     scenes = SceneManager(manager.light_plot)
+
+#     print("Zkouška: Bílá barva + plný dimmer")
+#     scenes.set_color_for_group("bass", (255, 255, 255))
+#     scenes.set_dim_for_group("bass", 255)
+
+#     time.sleep(3)
+
+#     print("Snížení dimmeru na 0...")
+#     scenes.set_dim_for_group("bass", 0)
+
+#     time.sleep(2)
+#     print("Test ukončen")
+#     manager.cleanup()
