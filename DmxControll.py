@@ -25,6 +25,29 @@ class DMXController:
     def update(self):
         pass
 
+    def _fade_single(self, addr, target, duration=0.5):
+        if not hasattr(self, '_fade_threads'):
+            self._fade_threads = {}
+
+        if addr in self._fade_threads:
+            self._fade_threads[addr].set()
+
+        stop_event = threading.Event()
+        self._fade_threads[addr] = stop_event
+
+        def interpolator():
+            start = self.get_value(addr)
+            steps = max(1, int(duration / 0.05))
+            for i in range(steps):
+                if stop_event.is_set():
+                    return
+                val = int(start + (target - start) * (i + 1) / steps)
+                self.set_value(addr, val)
+                time.sleep(0.05)
+            self.set_value(addr, target)
+
+        threading.Thread(target=interpolator, daemon=True).start()
+
 
 class Light:
     """Základní třída světla, sdílí jméno, adresu a přístup k DMX controlleru."""
@@ -142,7 +165,6 @@ class Haze(Light):
         self.set_param("fan", value)
 
 
-
 class LightPlot:
     def __init__(self, filename, dmx):
         self.filename = filename
@@ -258,14 +280,14 @@ class SceneManager:
     def __init__(self, light_plot):
         self.light_plot = light_plot
         self.ranges = {
-            "bass": (2, 20),
-            "midA": (31, 33),
-            "midB": (40, 121),
-            "midC": (121, 161),
-            "highA": (161, 196),
-            "highB": (196, 231),
-            "special":(0,1),
-            "strip":(0,2)
+            "bass": (1, 9),
+            "midA": (100, 119),
+            "midB": (120, 139),
+            "midC": (140, 159),
+            "highA": (300, 359),
+            "highB": (360, 499),
+            "special":(499,510),
+            "strip":(10,99)
         }
 
     def get_lights_in_range(self, start, end):
@@ -284,10 +306,6 @@ class SceneManager:
         print("provadim zhasnuti svetel")
 
     def set_color_for_group(self, group, color):
-        """
-        Nastaví barvu světel ve skupině. Podporuje RGB a volitelně W a UV.
-        Parametr `color` může být (r, g, b), (r, g, b, w) nebo (r, g, b, w, uv)
-        """
         for light in self.get_group_lights(group):
             if hasattr(light, 'set_color'):
                 r, g, b = color[0], color[1], color[2]
@@ -310,7 +328,7 @@ class SceneManager:
 
     def pulse_on_beat(self, group, intensity=255, duration=0.2):
         def pulse_thread():
-            time.sleep(0.03)  # malá pauza před nastavením
+            time.sleep(0.03)
             for light in self.get_group_lights(group):
                 if hasattr(light, 'set_dim'):
                     light.set_dim(intensity)
@@ -327,31 +345,25 @@ class SceneManager:
                 light.set_zoom(value)
 
     def set_movement_for_group(self, group, pan=None, tilt=None, speed=None):
-        """
-        Nastaví pozici a/nebo rychlost pohybu světel ve skupině.
-        Automaticky použije i 16bit verzi (panF, tiltF), pokud ji světlo má.
-        """
         for light in self.get_group_lights(group):
-            # Nastavení pozice
             if pan is not None or tilt is not None:
                 if hasattr(light, "channels"):
                     if pan is not None and "pan" in light.channels:
                         light.set_param("pan", pan)
                         if "panF" in light.channels:
-                            light.set_param("panF", 0)  # nebo jemná hodnota dle potřeby
+                            light.set_param("panF", 0)
                     if tilt is not None and "tilt" in light.channels:
                         light.set_param("tilt", tilt)
                         if "tiltF" in light.channels:
-                            light.set_param("tiltF", 0)  # nebo jemná hodnota dle potřeby
+                            light.set_param("tiltF", 0)
 
-            # Nastavení rychlosti
             if speed is not None and hasattr(light, "set_movement_speed"):
                 light.set_movement_speed(speed)
 
     def set_dim_all(self, value):
         for group in self.ranges.keys():
             self.set_dim_for_group(group, value)
-            
+
     def alternating_light_strip(self, group, state=True, intensity=255):
         lights = self.get_group_lights(group)
         for i, light in enumerate(lights):
@@ -361,11 +373,68 @@ class SceneManager:
                 else:
                     light.set_dim(0)
 
+    def save_scene(self, name, filename="vectorconfig/scenes.json"):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {}
 
+        data[name] = self.light_plot.dmx.buffer.copy()
+
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"Scéna '{name}' byla uložena.")
+
+    def load_scene(self, name, interpolate=True, filename="vectorconfig/scenes.json"):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            scene = data[name]
+        except (FileNotFoundError, KeyError):
+            print(f"Scéna '{name}' nebyla nalezena.")
+            return
+
+        for addr, val in enumerate(scene):
+            if interpolate:
+                self.light_plot.dmx._fade_single(addr, val)
+            else:
+                self.light_plot.dmx.set_value(addr, val)
+        print(f"Scéna '{name}' byla načtena.")
+    def delete_scene_from_file(self, name, filename="vectorconfig/scenes.json"):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if name in data:
+                del data[name]
+                with open(filename, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                print(f"Scéna '{name}' byla odstraněna ze souboru.")
+            else:
+                print(f"Scéna '{name}' neexistuje v souboru.")
+        except FileNotFoundError:
+            print("Soubor scén neexistuje.")
+
+    def list_scenes_in_file(self, filename="vectorconfig/scenes.json"):
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            print("Dostupné scény:")
+            for name in data:
+                print(f" - {name}")
+        except FileNotFoundError:
+            print("Soubor scén neexistuje.")
+        except json.JSONDecodeError:
+            print("Soubor scén je poškozen nebo prázdný.")
+            
+    def ensure_scene_file(self, filename="vectorconfig/scenes.json"):
+        if not os.path.exists(filename):
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump({}, f)
 
 
 if __name__ == "__main__":
-    manager = LightManager("light_plot.txt", dmx_frequency=30)
+    manager = LightManager("light_plot.txt", dmx_frequency=10)
     scenes = SceneManager(manager.light_plot)
 
     print("Spouštím IPython interaktivní shell...")
@@ -376,26 +445,10 @@ if __name__ == "__main__":
     scenes.blackout()             # vypne všechna světla
     scenes.pulse_on_beat('bass')  # pulz pro skupinu bass
     scenes.set_color_for_group("bass", (255, 255, 255)) # nastaví bílou na bass
+    scenes.save_scene("scena1")   # uloží aktuální DMX hodnoty jako 'scena1'
+    scenes.load_scene("scena1")   # načte scénu s interpolací
     manager.dmx.set_value(kanál,hodnota) #nastavení konkrétního kanálu
     Vypnutí je pomocí Ctrl + D 
         """)
 
-
     manager.cleanup()
-
-# if __name__ == "__main__":
-#     manager = LightManager("light_plot.txt", dmx_frequency=30)
-#     scenes = SceneManager(manager.light_plot)
-
-#     print("Zkouška: Bílá barva + plný dimmer")
-#     scenes.set_color_for_group("bass", (255, 255, 255))
-#     scenes.set_dim_for_group("bass", 255)
-
-#     time.sleep(3)
-
-#     print("Snížení dimmeru na 0...")
-#     scenes.set_dim_for_group("bass", 0)
-
-#     time.sleep(2)
-#     print("Test ukončen")
-#     manager.cleanup()

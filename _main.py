@@ -8,11 +8,12 @@ if __name__ == "__main__":
     sleep_time = 1.0 / dmx_frequency
 
     # Inicializace zdrojů
-    source = FileSource("Test/sound/davids_ant.wav")
+    source = FileSource("Test/sound/04.wav")
     audio = AudioPipeline(source)
     manager = LightManager("light_plot.txt", dmx_frequency=dmx_frequency)
     scene = SceneManager(manager.light_plot)
     vector = VectorClass(scene_manager=scene)
+    scene.load_scene("test02")
 
     try:
         audio.start()
